@@ -27,4 +27,11 @@ public partial class PantryView : ContentPage
         _items.Add(new PantryItem { Name = text });
         IngredientEntry.Text = "";
     }
+
+    private void OnRemoveClicked(object sender, EventArgs e)
+    {
+        var button = (Button)sender;
+        var item = (PantryItem)button.BindingContext;
+        _items.Remove(item);
+    }
 }
