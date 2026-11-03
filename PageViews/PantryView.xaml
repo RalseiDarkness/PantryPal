@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="PantryPal.PageViews.PantryView"
+             Title="My Pantry"
+             BackgroundColor="#FAEBDD"
+             >
+             
+
+    <Grid RowDefinitions="*,Auto" Padding="20">
+        
+        <CollectionView Grid.Row="0" x:Name="PantryList">
+            
+            <CollectionView.ItemTemplate>
+                
+                <DataTemplate>
+                    
+                    <Border BackgroundColor="#FBC29B" Padding="15" Margin="0,0,0,10">
+                        <Border.StrokeShape>
+                            <RoundRectangle CornerRadius="12" />
+                        </Border.StrokeShape>
+
+                        <Grid ColumnDefinitions="*,Auto">
+                            
+                            <VerticalStackLayout>
+                                <Label Text="{Binding Name}" TextColor="Black" FontAttributes="Bold" />
+                                <Label Text="{Binding Brand}" TextColor="Black" />
+                            </VerticalStackLayout>
+                            
+                            <Label Grid.Column="1" Text="{Binding Price, StringFormat='${0:F2}'}"
+                            TextColor="Black" VerticalOptions="Center" />
+                        </Grid>
+
+                    </Border>
+                    
+                </DataTemplate>
+                
+            </CollectionView.ItemTemplate>
+            
+        </CollectionView>
+
+        <Grid Grid.Row="1" ColumnDefinitions="*,Auto" ColumnSpacing="10">
+            
+            <Entry x:Name="IngredientEntry" Placeholder="Enter a new ingredient" TextColor="Black" />
+            <Button Grid.Column="1" Text="+" BackgroundColor="#F26100" TextColor="White" Clicked="OnAddClicked" />
+            
+        </Grid>
+        
+    </Grid>
+
+</ContentPage>
