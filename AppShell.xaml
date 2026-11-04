@@ -3,12 +3,18 @@
     x:Class="PantryPal.AppShell"
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-    xmlns:local="clr-namespace:PantryPal"
-    xmlns:views="clr-namespace:PantryPal.PageViews" 
+    xmlns:views="clr-namespace:PantryPal.Views"
     Title="PantryPal">
 
     <TabBar>
-        <ShellContent Title="My Pantry" ContentTemplate="{DataTemplate views:PantryView}" />
+        <Tab Title="Favorites">
+            <ShellContent 
+                ContentTemplate="{DataTemplate views:Favorites}" />
+        </Tab>
+        <Tab Title="FindRecipes">
+            <ShellContent 
+                ContentTemplate="{DataTemplate views:FindRecipes}" />
+        </Tab>
     </TabBar>
 
 </Shell>
