@@ -6,14 +6,15 @@
     xmlns:views="clr-namespace:PantryPal.Views"
     Title="PantryPal">
 
-    <ShellContent
-        Title="Ingredients"
-        ContentTemplate="{DataTemplate views:AllNotesPage}"
-        Route="AllNotesPage" />
-
-    <ShellContent
-        Title="Practice"
-        ContentTemplate="{DataTemplate views:Practice}"
-        Route="Practice" />
+    <TabBar>
+        <Tab Title="Favorites">
+            <ShellContent 
+                ContentTemplate="{DataTemplate views:Favorites}" />
+        </Tab>
+        <Tab Title="FindRecipes">
+            <ShellContent 
+                ContentTemplate="{DataTemplate views:FindRecipes}" />
+        </Tab>
+    </TabBar>
 
 </Shell>
