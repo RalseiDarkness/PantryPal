@@ -15,9 +15,10 @@
 
                 <DataTemplate>
 
-                    <Border BackgroundColor="#FBC29B" Padding="15" Margin="0,0,0,10">
+                    <Border BackgroundColor="#FBC29B" Padding="15" Margin="0,0,0,10" Stroke="DarkOrange">
                         <Border.StrokeShape>
-                            <RoundRectangle CornerRadius="12" />
+                            <RoundRectangle CornerRadius="12" /> 
+
                         </Border.StrokeShape>
 
                         <Grid ColumnDefinitions="*,Auto">
@@ -27,8 +28,12 @@
                                 <Label Text="{Binding Brand}" TextColor="Black" />
                             </VerticalStackLayout>
 
-                            <Label Grid.Column="1" Text="{Binding Price, StringFormat='${0:F2}'}"
-                            TextColor="Black" VerticalOptions="Center" />
+                            <VerticalStackLayout Grid.Column="0" VerticalOptions="Center" HorizontalOptions="End" >
+                                
+                                <Label Text="{Binding DateAdded, StringFormat='{0:MM/dd}'}" TextColor="Black" FontSize="12" />
+                                <Label Text="{Binding Price, StringFormat='${0:F2}'}" Padding="20,0" TextColor="Black" />
+                                
+                            </VerticalStackLayout>
 
                             <Button Grid.Column="2" Text="X" BackgroundColor="#E5566D" TextColor="White"
                             WidthRequest="40" HeightRequest="40" Padding="0"
@@ -44,11 +49,25 @@
 
         </CollectionView>
 
-        <Grid Grid.Row="1" ColumnDefinitions="*,Auto" ColumnSpacing="10">
+        <Grid Grid.Row="1" ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto"
+        ColumnSpacing="10" RowSpacing="8">
 
-            <Entry x:Name="IngredientEntry" Placeholder="Enter a new ingredient" TextColor="Black" />
-            <Button Grid.Column="1" Text="+" BackgroundColor="#F26100" TextColor="White" Clicked="OnAddClicked" />
+            <Entry x:Name="IngredientEntry" Placeholder="Ingredient name" TextColor="Black" />
 
+            <Grid Grid.Row="1" ColumnDefinitions="*,*,Auto" ColumnSpacing="8">
+                
+                <Entry x:Name="BrandEntry" Placeholder="Brand" TextColor="Black" />
+                
+                <Entry Grid.Column="1" x:Name="PriceEntry" Placeholder="Price"
+                Keyboard="Numeric" TextColor="Black" />
+                
+                <DatePicker Grid.Column="2" x:Name="DateEntry" TextColor="Black" />
+                
+            </Grid>
+
+            <Button Grid.Column="1" Grid.RowSpan="2" Text="+" BackgroundColor="#F26100"
+            TextColor="White" Clicked="OnAddClicked" />
+            
         </Grid>
 
     </Grid>
