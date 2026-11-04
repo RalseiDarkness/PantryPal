@@ -19,12 +19,25 @@ public partial class PantryView : ContentPage
 
     private void OnAddClicked(object sender, EventArgs e)
     {
-        string text = IngredientEntry.Text;
-        if (string.IsNullOrWhiteSpace(text)) return;
+        string name = IngredientEntry.Text;
+        if (string.IsNullOrWhiteSpace(name)) return;
 
-        _items.Add(new PantryItem { Name = text });
-        IngredientEntry.Text = "";
+        double.TryParse(PriceEntry.Text, out double price);
+
+        _items.Add(new PantryItem
+        {
+            Name = name,
+            Brand = BrandEntry.Text,
+            Price = price,
+            Date = DateEntry.Date ?? DateTime.Today
+        });
+
         _service.Save(_items);
+
+        IngredientEntry.Text = "";
+        BrandEntry.Text = "";
+        PriceEntry.Text = "";
+        DateEntry.Date = DateTime.Today;
     }
 
     private void OnRemoveClicked(object sender, EventArgs e)
