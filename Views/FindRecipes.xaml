@@ -3,7 +3,11 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:models ="clr-namespace:PantryPal.Models"
              x:Class="PantryPal.Views.FindRecipes"
-             x:DataType="models:FindRecipes">
+             x:DataType="models:FindRecipes"
+             BackgroundColor="#FAEBDD"
+             Title="PantryPal"
+             >
+    
     <ContentPage.BindingContext>
         <models:FindRecipes />
     </ContentPage.BindingContext>
