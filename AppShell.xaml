@@ -5,18 +5,23 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:views="clr-namespace:PantryPal.Views"
     xmlns:pageviews="clr-namespace:PantryPal.PageViews"
-    Title="PantryPal">
+    Title="PantryPal"
+    >
 
     <TabBar>
-        <Tab Title="Favorites">
+        <Tab Title="Home">
+            <ShellContent
+                 ContentTemplate="{DataTemplate views:HomePage}" />
+        </Tab>         
+        <Tab Title="Favorites" Icon="bookmark.png">
             <ShellContent 
                 ContentTemplate="{DataTemplate views:Favorites}" />
         </Tab>
-        <Tab Title="Find Recipes">
+        <Tab Title="Find Recipes" Icon="search.png">
             <ShellContent 
                 ContentTemplate="{DataTemplate views:FindRecipes}" />
         </Tab>
-        <Tab Title="Pantry Items">
+        <Tab Title="Pantry Items" Icon="restaurant.png">
             <ShellContent 
                 ContentTemplate="{DataTemplate pageviews:PantryView}" />
         </Tab>
