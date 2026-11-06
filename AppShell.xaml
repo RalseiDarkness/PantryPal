@@ -13,8 +13,9 @@
                 ContentTemplate="{DataTemplate views:Favorites}" />
         </Tab>
         <Tab Title="Find Recipes">
-            <ShellContent 
-                ContentTemplate="{DataTemplate views:FindRecipes}" />
+            <ShellContent
+                x:Name="RecipeSearchContent"
+                Route="FindRecipes" />
         </Tab>
         <Tab Title="Pantry Items">
             <ShellContent 

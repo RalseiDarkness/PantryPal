@@ -1,51 +1,141 @@
+
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-             xmlns:models ="clr-namespace:PantryPal.Models"
+             xmlns:models="clr-namespace:PantryPal.Models"
+             xmlns:viewmodels="clr-namespace:PantryPal.ViewModels"
              x:Class="PantryPal.Views.FindRecipes"
-             x:DataType="models:FindRecipes">
-    <ContentPage.BindingContext>
-        <models:FindRecipes />
-    </ContentPage.BindingContext>
-    <Grid RowDefinitions="Auto,*">
-        <VerticalStackLayout Grid.Row="0" Padding="5" Margin="20">
+             x:DataType="viewmodels:RecipeSearchViewModel">
+
+    <Grid Padding="20" RowDefinitions="Auto,Auto,Auto,*" RowSpacing="12">
+
+        <VerticalStackLayout Grid.Row="0" Spacing="8">
             <Label
-                Text="Results"
+                Text="Recipes from My Pantry"
                 FontSize="28"
-                FontAttributes="Bold"/>
+                FontAttributes="Bold" />
+
+            <Label
+                Text="Search using the ingredients saved in your pantry."
+                FontSize="14" />
+
+            <Button
+                Text="Find Recipes"
+                Command="{Binding SearchRecipesCommand}"
+                IsEnabled="{Binding IsNotBusy}" />
         </VerticalStackLayout>
 
-        <CollectionView Grid.Row="1" 
-                        ItemsSource="{Binding Recipes}" 
-                        ItemsLayout="HorizontalList">
+        <HorizontalStackLayout
+            Grid.Row="1"
+            Spacing="10"
+            IsVisible="{Binding IsBusy}">
+
+            <ActivityIndicator IsRunning="{Binding IsBusy}" />
+
+            <Label
+                Text="Searching recipes..."
+                VerticalOptions="Center" />
+        </HorizontalStackLayout>
+
+        <Label
+            Grid.Row="2"
+            Text="{Binding ErrorMessage}"
+            TextColor="Red"
+            IsVisible="{Binding HasError}" />
+
+        <Label
+            Grid.Row="2"
+            Text="{Binding EmptyMessage}"
+            IsVisible="{Binding HasEmptyMessage}" />
+
+        <CollectionView
+            Grid.Row="3"
+            ItemsSource="{Binding Recipes}"
+            IsVisible="{Binding HasRecipes}"
+            ItemsLayout="HorizontalList">
+
             <CollectionView.ItemTemplate>
-                <DataTemplate x:DataType="models:Recipe">
+                <DataTemplate x:DataType="models:RecipeSearchResult">
 
                     <Border
                         Padding="15"
-                        Margin="15"
-                        WidthRequest="250"
-                        HeightRequest="250"
-                        HorizontalOptions="Start"
-                        VerticalOptions="Start"
+                        Margin="0,0,12,0"
+                        WidthRequest="280"
                         Stroke="LightGray"
                         StrokeThickness="1">
 
-                        <VerticalStackLayout>
+                        <VerticalStackLayout Spacing="8">
+
                             <Label
-                                Text="{Binding Name}"
+                                Text="{Binding Title}"
                                 FontSize="18"
                                 FontAttributes="Bold" />
 
                             <Label
-                                Text="{Binding Description}"
-                                FontSize="14" />
-                        </VerticalStackLayout>
+                                Text="{Binding Instructions}"
+                                FontSize="14"
+                                LineBreakMode="TailTruncation"
+                                MaxLines="5" />
 
+                            <Label
+                                Text="{Binding ReadyInMinutes, StringFormat='Ready in {0} min'}"
+                                FontSize="13" />
+
+                            <Label
+                                Text="{Binding MatchingIngredientCount, StringFormat='Pantry matches: {0}'}"
+                                FontSize="13"
+                                FontAttributes="Bold" />
+
+                            <Label
+                                Text="You already have:"
+                                FontAttributes="Bold"
+                                TextColor="Green" />
+
+                            <VerticalStackLayout
+                                BindableLayout.ItemsSource="{Binding MatchingIngredients}"
+                                Spacing="2">
+
+                                <BindableLayout.ItemTemplate>
+                                    <DataTemplate x:DataType="x:String">
+                                        <Label
+                                            Text="{Binding .}"
+                                            FontSize="13" />
+                                    </DataTemplate>
+                                </BindableLayout.ItemTemplate>
+
+                            </VerticalStackLayout>
+
+                            <Label
+                                Text="{Binding MissingIngredientCount, StringFormat='Missing ingredients: {0}'}"
+                                FontSize="13"
+                                FontAttributes="Bold" />
+
+                            <Label
+                                Text="You still need:"
+                                FontAttributes="Bold"
+                                TextColor="Red" />
+
+                            <VerticalStackLayout
+                                BindableLayout.ItemsSource="{Binding MissingIngredients}"
+                                Spacing="2">
+
+                                <BindableLayout.ItemTemplate>
+                                    <DataTemplate x:DataType="x:String">
+                                        <Label
+                                            Text="{Binding .}"
+                                            FontSize="13" />
+                                    </DataTemplate>
+                                </BindableLayout.ItemTemplate>
+
+                            </VerticalStackLayout>
+
+                        </VerticalStackLayout>
                     </Border>
 
                 </DataTemplate>
             </CollectionView.ItemTemplate>
+
         </CollectionView>
+
     </Grid>
 </ContentPage>

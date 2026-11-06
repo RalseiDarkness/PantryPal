@@ -1,12 +1,13 @@
-﻿namespace PantryPal;
+﻿using PantryPal.Views;
+
+namespace PantryPal;
 
 public partial class AppShell : Shell
 {
-	public AppShell()
+	public AppShell(FindRecipes findRecipes)
 	{
 		InitializeComponent();
-
-		Routing.RegisterRoute("FindRecipes", typeof(Views.FindRecipes));
+		RecipeSearchContent.Content = findRecipes;
 
 		Routing.RegisterRoute("Favorites", typeof(Views.Favorites));
 	}

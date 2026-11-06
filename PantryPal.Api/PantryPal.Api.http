@@ -1,0 +1,34 @@
+@PantryPal.Api_HostAddress = http://localhost:5222
+
+GET {{PantryPal.Api_HostAddress}}/api/recipes
+Accept: application/json
+
+###
+
+POST {{PantryPal.Api_HostAddress}}/api/recipes/search
+Content-Type: application/json
+
+{
+  "ingredientNames": ["garnish"]
+}
+
+###
+
+POST {{PantryPal.Api_HostAddress}}/api/recipes/search
+Content-Type: application/json
+
+{
+  "ingredientIds": [-1]
+}
+
+###
+
+GET {{PantryPal.Api_HostAddress}}/health/database
+Accept: application/json
+
+###
+
+GET {{PantryPal.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
