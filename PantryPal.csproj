@@ -72,13 +72,8 @@
 	</ItemGroup>
 
 	<ItemGroup>
-<<<<<<< Updated upstream
 	  <Compile Update="Views\HomePage.xaml.cs">
 	    <DependentUpon>HomePage.xaml</DependentUpon>
-=======
-	  <Compile Update="PageViews\HomeView.xaml.cs">
-	    <DependentUpon>HomeView.xaml</DependentUpon>
->>>>>>> Stashed changes
 	  </Compile>
 	</ItemGroup>
 
@@ -86,11 +81,7 @@
 	  <MauiXaml Update="PageViews\PantryView.xaml">
 	    <Generator>MSBuild:Compile</Generator>
 	  </MauiXaml>
-<<<<<<< Updated upstream
 	  <MauiXaml Update="Views\HomePage.xaml">
-=======
-	  <MauiXaml Update="PageViews\HomeView.xaml">
->>>>>>> Stashed changes
 	    <Generator>MSBuild:Compile</Generator>
 	  </MauiXaml>
 	</ItemGroup>
