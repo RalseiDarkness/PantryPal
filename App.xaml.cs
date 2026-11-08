@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
+using PantryPal.Views;
 
 namespace PantryPal;
 
