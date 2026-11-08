@@ -3,23 +3,27 @@
     x:Class="PantryPal.AppShell"
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-    xmlns:views="clr-namespace:PantryPal.Views"
-    xmlns:pageviews="clr-namespace:PantryPal.PageViews"
-    Title="PantryPal">
+    xmlns:local="clr-namespace:PantryPal"
+    xmlns:views="clr-namespace:PantryPal.PageViews"
+    Title="PantryPal"
+    Shell.NavBarIsVisible="False"
+    Shell.TabBarIsVisible="False">
+    <!-- The built-in bars are hidden, shows Controls/TabHeader instead-->
 
-    <TabBar>
-        <Tab Title="Favorites">
-            <ShellContent 
-                ContentTemplate="{DataTemplate views:Favorites}" />
+
+    <!-- ContentTemplate creates its page the first time its opened -->
+    <TabBar x:Name="MainTabs">
+
+        <Tab Route="favorites" Title="Favorites">
+            <ShellContent ContentTemplate="{DataTemplate views:FavoritesView}" />
         </Tab>
-        <Tab Title="Find Recipes">
-            <ShellContent 
-                ContentTemplate="{DataTemplate views:FindRecipes}" />
+        <Tab Route="recipes" Title="Find Recipes">
+            <ShellContent ContentTemplate="{DataTemplate views:RecipesView}" />
         </Tab>
-        <Tab Title="Pantry Items">
-            <ShellContent 
-                ContentTemplate="{DataTemplate pageviews:PantryView}" />
+        <Tab x:Name="PantryTab" Route="pantry" Title="My Pantry">
+            <ShellContent ContentTemplate="{DataTemplate views:PantryView}" />
         </Tab>
+
     </TabBar>
 
 </Shell>
