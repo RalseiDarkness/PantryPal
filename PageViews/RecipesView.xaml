@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:controls="clr-namespace:PantryPal.Controls"
+             x:Class="PantryPal.PageViews.RecipesView"
+             Title="Find Recipes"
+             BackgroundColor="{StaticResource PantryBackground}">
+
+    <Grid RowDefinitions="Auto,*">
+
+        <!-- Tabs and page name -->
+        <controls:TabHeader PageTitle="Find Recipes" />
+
+        <Label Grid.Row="1" Text="Recipes that match your pantry will show up here."
+               TextColor="{StaticResource PantryMutedText}"
+               HorizontalOptions="Center" VerticalOptions="Center" />
+    </Grid>
+
+</ContentPage>

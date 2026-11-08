@@ -12,6 +12,18 @@
     <Color x:Key="SecondaryDarkText">#9880e5</Color>
     <Color x:Key="Tertiary">#2B0B98</Color>
 
+    <!-- PantryPal palette: change a color here and every page using it updates -->
+    <Color x:Key="PantryBackground">#FAEBDD</Color>
+    <Color x:Key="PantryCard">#FBC29B</Color>
+    <Color x:Key="PantryOrange">#F26100</Color>
+    <Color x:Key="PantryRemove">#E5566D</Color>
+    <Color x:Key="PantryAdd">#BDF5A0</Color>
+    <Color x:Key="PantryAddText">#2F7D18</Color>
+    <Color x:Key="PantryField">#F7F5F2</Color>
+    <Color x:Key="PantryText">#1F1F1F</Color>
+    <Color x:Key="PantryMutedText">#5A4A3F</Color>
+    <Color x:Key="PantryError">#B3261E</Color>
+
     <Color x:Key="White">White</Color>
     <Color x:Key="Black">Black</Color>
     <Color x:Key="Magenta">#D600AA</Color>

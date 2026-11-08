@@ -1,47 +1,115 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:models="clr-namespace:PantryPal.Models"
+             xmlns:controls="clr-namespace:PantryPal.Controls"
              x:Class="PantryPal.PageViews.PantryView"
              Title="My Pantry"
-             BackgroundColor="#FAEBDD"
-             >
+             BackgroundColor="{StaticResource PantryBackground}">
 
+    <!-- styles here apply to this page only -->
+    <ContentPage.Resources>
 
-    <Grid RowDefinitions="*,Auto" Padding="20">
+        <Style x:Key="ItemTitle" TargetType="Label">
+            <Setter Property="TextColor" Value="{StaticResource PantryText}" />
+            <Setter Property="FontFamily" Value="OpenSansSemibold" />
+            <Setter Property="FontSize" Value="17" />
+            <Setter Property="VerticalOptions" Value="Center" />
+            <Setter Property="LineBreakMode" Value="TailTruncation" />
+        </Style>
 
-        <CollectionView Grid.Row="0" x:Name="PantryList">
+        <Style x:Key="ItemDetail" TargetType="Label">
+            <Setter Property="TextColor" Value="{StaticResource PantryMutedText}" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="VerticalOptions" Value="Center" />
+            <Setter Property="LineBreakMode" Value="TailTruncation" />
+        </Style>
+
+        <Style x:Key="FieldBox" TargetType="Border">
+            <Setter Property="BackgroundColor" Value="{StaticResource PantryField}" />
+            <Setter Property="Stroke" Value="{StaticResource PantryCard}" />
+            <Setter Property="StrokeThickness" Value="2" />
+            <Setter Property="StrokeShape" Value="RoundRectangle 14" />
+            <Setter Property="Padding" Value="8,0" />
+        </Style>
+
+        <Style x:Key="FieldEntry" TargetType="Entry">
+            <Setter Property="TextColor" Value="{StaticResource PantryText}" />
+            <Setter Property="PlaceholderColor" Value="{StaticResource PantryMutedText}" />
+        </Style>
+
+        <Style x:Key="SquareButton" TargetType="Button">
+            <Setter Property="WidthRequest" Value="48" />
+            <Setter Property="HeightRequest" Value="48" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="CornerRadius" Value="12" />
+            <Setter Property="FontFamily" Value="OpenSansSemibold" />
+            <Setter Property="FontSize" Value="20" />
+        </Style>
+
+    </ContentPage.Resources>
+
+    <!--Main UI-->
+    <Grid RowDefinitions="Auto,*,Auto" RowSpacing="16" Padding="24,0,24,20" MaximumWidthRequest="680">
+
+        <!-- Tabs and page name -->
+        <controls:TabHeader PageTitle="My Pantry" />
+
+        <!-- Pantry list -->
+        <CollectionView Grid.Row="1" x:Name="PantryList">
+
+            <!-- shown whenever the list has no items -->
+            <CollectionView.EmptyView>
+                <VerticalStackLayout VerticalOptions="Center" HorizontalOptions="Center" Spacing="4">
+                    <Label Text="Your pantry is empty" Style="{StaticResource ItemTitle}"
+                           HorizontalOptions="Center" />
+                    <Label Text="Add your first ingredient below." Style="{StaticResource ItemDetail}"
+                           HorizontalOptions="Center" />
+                </VerticalStackLayout>
+            </CollectionView.EmptyView>
 
             <CollectionView.ItemTemplate>
 
-                <DataTemplate>
+                <!-- x:DataType checks every {Binding} name against PantryItem -->
+                <DataTemplate x:DataType="models:PantryItem">
 
-                    <Border BackgroundColor="#FBC29B" Padding="15" Margin="0,0,0,10" Stroke="DarkOrange">
-                        <Border.StrokeShape>
-                            <RoundRectangle CornerRadius="12" /> 
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" Padding="0,0,0,12">
 
-                        </Border.StrokeShape>
+                        <!--the border is the background and the labels are the text for every item-->
+                        <Border BackgroundColor="{StaticResource PantryCard}" StrokeThickness="0"
+                                StrokeShape="RoundRectangle 22">
 
-                        <Grid ColumnDefinitions="*,Auto">
+                            <Grid ColumnDefinitions="72,*,Auto" RowDefinitions="*,*"
+                                  HeightRequest="72" ColumnSpacing="14">
 
-                            <VerticalStackLayout>
-                                <Label Text="{Binding Name}" TextColor="Black" FontAttributes="Bold" />
-                                <Label Text="{Binding Brand}" TextColor="Black" />
-                            </VerticalStackLayout>
+                                <!-- letter photo -->
+                                <BoxView Grid.RowSpan="2" Color="{StaticResource PantryOrange}" />
+                                <Label Grid.RowSpan="2" Text="{Binding Initial}" TextColor="White"
+                                       FontFamily="OpenSansSemibold" FontSize="28"
+                                       HorizontalOptions="Center" VerticalOptions="Center" />
+                                <!---->
 
-                            <VerticalStackLayout Grid.Column="0" VerticalOptions="Center" HorizontalOptions="End" >
-                                
-                                <Label Text="{Binding DateAdded, StringFormat='{0:MM/dd}'}" TextColor="Black" FontSize="12" />
-                                <Label Text="{Binding Price, StringFormat='${0:F2}'}" Padding="20,0" TextColor="Black" />
-                                
-                            </VerticalStackLayout>
+                                <Label Grid.Column="1" Text="{Binding Name}"
+                                       Style="{StaticResource ItemTitle}" />
+                                <Label Grid.Column="1" Grid.Row="1" Text="{Binding BrandLabel}"
+                                       Style="{StaticResource ItemDetail}" />
 
-                            <Button Grid.Column="2" Text="X" BackgroundColor="#E5566D" TextColor="White"
-                            WidthRequest="40" HeightRequest="40" Padding="0"
-                            Clicked="OnRemoveClicked" />
+                                <Label Grid.Column="2" Text="{Binding Date, StringFormat='{0:MM/dd}'}"
+                                       Style="{StaticResource ItemDetail}"
+                                       HorizontalOptions="Center" Margin="0,0,16,0" />
+                                <Label Grid.Column="2" Grid.Row="1" Text="{Binding Price, StringFormat='${0:F2}'}"
+                                       Style="{StaticResource ItemDetail}"
+                                       HorizontalOptions="End" Margin="0,0,16,0" />
+                            </Grid>
+                            
+                        </Border>
 
-                        </Grid>
-
-                    </Border>
+                        <!--button at the end of the grid-->
+                        <Button Grid.Column="1" Text="X" Style="{StaticResource SquareButton}"
+                                BackgroundColor="{StaticResource PantryRemove}" TextColor="White"
+                                VerticalOptions="Center" Clicked="OnRemoveClicked"
+                                SemanticProperties.Description="Remove this ingredient" />
+                    </Grid>
 
                 </DataTemplate>
 
@@ -49,25 +117,59 @@
 
         </CollectionView>
 
-        <Grid Grid.Row="1" ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto"
-        ColumnSpacing="10" RowSpacing="8">
+        <!-- Add options-->
+        <Grid Grid.Row="2" ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto"
+              ColumnSpacing="12" RowSpacing="8">
 
-            <Entry x:Name="IngredientEntry" Placeholder="Ingredient name" TextColor="Black" />
+            <Border Style="{StaticResource FieldBox}">
+                <Entry x:Name="IngredientEntry" Placeholder="Search for an ingredient"
+                       Style="{StaticResource FieldEntry}"
+                       TextChanged="OnIngredientTextChanged" Completed="OnAddClicked" />
+            </Border>
 
-            <Grid Grid.Row="1" ColumnDefinitions="*,*,Auto" ColumnSpacing="8">
-                
-                <Entry x:Name="BrandEntry" Placeholder="Brand" TextColor="Black" />
-                
-                <Entry Grid.Column="1" x:Name="PriceEntry" Placeholder="Price"
-                Keyboard="Numeric" TextColor="Black" />
-                
-                <DatePicker Grid.Column="2" x:Name="DateEntry" TextColor="Black" />
-                
+            <Button Grid.Column="1" Text="+" Style="{StaticResource SquareButton}"
+                    BackgroundColor="{StaticResource PantryAdd}" TextColor="{StaticResource PantryAddText}"
+                    Clicked="OnAddClicked" SemanticProperties.Description="Add ingredient" />
+
+            <!-- autocomplete, hidden until there are matches -->
+            <Border x:Name="SuggestionPanel" Grid.Row="1" IsVisible="False"
+                    BackgroundColor="{StaticResource PantryCard}" StrokeThickness="0"
+                    StrokeShape="RoundRectangle 14" Padding="16,8">
+
+                <!-- BindableLayout repeats the template for each item, like a small CollectionView -->
+                <VerticalStackLayout x:Name="SuggestionList">
+                    
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="x:String">
+                            <Label Text="{Binding .}" Style="{StaticResource ItemDetail}" Padding="0,5">
+                                <Label.GestureRecognizers>
+                                    <TapGestureRecognizer Tapped="OnSuggestionTapped" />
+                                </Label.GestureRecognizers>
+                            </Label>
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                    
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- optional details -->
+            <Grid Grid.Row="2" ColumnDefinitions="*,*,Auto" ColumnSpacing="8">
+                <Border Style="{StaticResource FieldBox}">
+                    <Entry x:Name="BrandEntry" Placeholder="Brand (optional)"
+                           Style="{StaticResource FieldEntry}" Completed="OnAddClicked" />
+                </Border>
+                <Border Grid.Column="1" Style="{StaticResource FieldBox}">
+                    <Entry x:Name="PriceEntry" Placeholder="Price (optional)" Keyboard="Numeric"
+                           Style="{StaticResource FieldEntry}" Completed="OnAddClicked" />
+                </Border>
+                <Border Grid.Column="2" Style="{StaticResource FieldBox}">
+                    <DatePicker x:Name="DateEntry" Format="MM/dd/yyyy"
+                                TextColor="{StaticResource PantryText}" />
+                </Border>
             </Grid>
 
-            <Button Grid.Column="1" Grid.RowSpan="2" Text="+" BackgroundColor="#F26100"
-            TextColor="White" Clicked="OnAddClicked" />
-            
+            <Label x:Name="ErrorLabel" Grid.Row="3" Grid.ColumnSpan="2" IsVisible="False"
+                   TextColor="{StaticResource PantryError}" HorizontalOptions="Center" />
         </Grid>
 
     </Grid>
