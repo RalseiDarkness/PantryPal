@@ -6,7 +6,7 @@ public partial class AppShell : Shell
 	{
 		InitializeComponent();
 
-		// the app opens on My Pantry.
-		MainTabs.CurrentItem = PantryTab;
-	}
+        // the app opens on HomePage.
+        MainTabs.CurrentItem = HomePage;
+    }
 }

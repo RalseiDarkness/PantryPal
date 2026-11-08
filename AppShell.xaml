@@ -17,11 +17,17 @@
         <Tab Route="favorites" Title="Favorites">
             <ShellContent ContentTemplate="{DataTemplate views:FavoritesView}" />
         </Tab>
+        
         <Tab Route="recipes" Title="Find Recipes">
             <ShellContent ContentTemplate="{DataTemplate views:RecipesView}" />
         </Tab>
+        
         <Tab x:Name="PantryTab" Route="pantry" Title="My Pantry">
             <ShellContent ContentTemplate="{DataTemplate views:PantryView}" />
+        </Tab>
+        
+        <Tab x:Name="HomePage" Route="home" Title="Welcome">
+            <ShellContent ContentTemplate="{DataTemplate views:HomeView}" />
         </Tab>
 
     </TabBar>
