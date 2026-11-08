@@ -17,6 +17,7 @@
             <ShellContent 
                 ContentTemplate="{DataTemplate views:Favorites}" />
         </Tab>
+<<<<<<< Updated upstream
         <Tab Title="Find Recipes" Icon="search.png">
             <ShellContent 
                 ContentTemplate="{DataTemplate views:FindRecipes}" />
@@ -25,6 +26,21 @@
             <ShellContent 
                 ContentTemplate="{DataTemplate pageviews:PantryView}" />
         </Tab>
+=======
+        
+        <Tab Route="recipes" Title="Find Recipes">
+            <ShellContent ContentTemplate="{DataTemplate views:RecipesView}" />
+        </Tab>
+        
+        <Tab x:Name="PantryTab" Route="pantry" Title="My Pantry">
+            <ShellContent ContentTemplate="{DataTemplate views:PantryView}" />
+        </Tab>
+        
+        <Tab x:Name="HomePage" Route="home" Title="Welcome">
+            <ShellContent ContentTemplate="{DataTemplate views:HomeView}" />
+        </Tab>
+
+>>>>>>> Stashed changes
     </TabBar>
 
 </Shell>
