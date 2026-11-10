@@ -105,26 +105,45 @@ public partial class RecipeSearchViewModel : ObservableObject
         Recipes.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasRecipes));
     }
 
-    partial void OnIngredientQueryChanged(string value)
+partial void OnIngredientQueryChanged(string value)
+{
+    var version = Interlocked.Increment(ref _suggestionSearchVersion);
+    var query = value.Trim();
+    CancellationTokenSource? cancellation = null;
+
+    lock (_suggestionSearchLock)
     {
         _suggestionSearchCancellation?.Cancel();
-        _suggestionSearchCancellation?.Dispose();
-        Suggestions.Clear();
-        SuggestionErrorMessage = null;
 
-        if (query.Length < 2)
+        if (query.Length >= 2)
         {
-            IsSearchingIngredients = false;
-            return;
+            cancellation = new CancellationTokenSource();
+            _suggestionSearchCancellation = cancellation;
         }
-
-        IsSearchingIngredients = true;
-        _ = LoadSuggestionsAsync(
-            query,
-            cancellation!,
-            cancellation!.Token,
-            version);
+        else
+        {
+            _suggestionSearchCancellation = null;
+        }
     }
+
+    Suggestions.Clear();
+    SuggestionErrorMessage = null;
+
+    if (query.Length < 2)
+    {
+        IsSearchingIngredients = false;
+        return;
+    }
+
+    IsSearchingIngredients = true;
+
+    _ = LoadSuggestionsAsync(
+        query,
+        cancellation!,
+        cancellation!.Token,
+        version);
+}
+
 
     private async Task LoadSuggestionsAsync(
         string query,
@@ -182,16 +201,30 @@ public partial class RecipeSearchViewModel : ObservableObject
         }
         finally
         {
-            bool wasActive;
-            lock (_suggestionSearchLock)
-            {
-                wasActive = ReferenceEquals(_suggestionSearchCancellation, cancellation);
-                if (wasActive)
-                {
-                    _suggestionSearchCancellation = null;
-                }
+    bool wasActive;
 
-            cancellation.Dispose();
+    lock (_suggestionSearchLock)
+    {
+        wasActive = ReferenceEquals(_suggestionSearchCancellation, cancellation);
+
+        if (wasActive)
+        {
+            _suggestionSearchCancellation = null;
+        }
+
+        cancellation.Dispose();
+    }
+
+    if (wasActive)
+    {
+        await MainThread.InvokeOnMainThreadAsync(() =>
+        {
+            if (version == Volatile.Read(ref _suggestionSearchVersion))
+            {
+                IsSearchingIngredients = false;
+            }
+        });
+    }
         }
     }
 
