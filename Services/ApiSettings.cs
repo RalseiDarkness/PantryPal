@@ -9,10 +9,14 @@ public static class ApiSettings
     private const string MacCatalystDevelopmentBaseAddress = "http://localhost:5222/";
     private const string AndroidEmulatorDevelopmentBaseAddress = "http://10.0.2.2:5222/";
     private const string WindowsDevelopmentBaseAddress = "http://localhost:5222/";
+#else
+    private const string DeployedApiBaseAddress =
+        "https://pantrypal-api-frgrbrbjcccbh3gn.westus-01.azurewebsites.net/";
 #endif
 
     public static Uri GetBaseAddress()
     {
+#if DEBUG
         var configuredAddress = Preferences.Default.Get(
             BaseAddressPreferenceKey,
             string.Empty);
@@ -21,6 +25,7 @@ public static class ApiSettings
         {
             return ValidateBaseAddress(configuredAddress);
         }
+#endif
 
 #if DEBUG
         if (DeviceInfo.Platform == DevicePlatform.MacCatalyst)
@@ -40,8 +45,7 @@ public static class ApiSettings
 
         return new Uri(MacCatalystDevelopmentBaseAddress);
 #else
-        throw new InvalidOperationException(
-            "Configure the PantryPal API base address before searching for recipes.");
+        return new Uri(DeployedApiBaseAddress);
 #endif
     }
 
