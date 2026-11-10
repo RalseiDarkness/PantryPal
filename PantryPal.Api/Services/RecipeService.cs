@@ -16,14 +16,79 @@ public class RecipeService
         _sqlFactory = sqlFactory;
     }
 
-    public async Task<List<Recipe>> GetAllRecipesAsync()
+    public async Task<List<IngredientSuggestion>> SearchIngredientsAsync(
+        string query,
+        CancellationToken cancellationToken = default)
+    {
+        var suggestions = new List<IngredientSuggestion>();
+        await using var connection =
+            await _sqlFactory.CreateConnectionAsync(cancellationToken);
+
+        await connection.OpenAsync(cancellationToken);
+
+        const string sql = """
+            SELECT TOP (10) IngredientID, IngredientName
+            FROM Ingredients
+            WHERE IngredientName LIKE @SearchPattern ESCAPE '\'
+            ORDER BY IngredientName;
+            """;
+
+        await using var command = new SqlCommand(sql, connection);
+        command.Parameters.Add("@SearchPattern", SqlDbType.NVarChar, 202)
+            .Value = $"%{EscapeLikePattern(query.Trim())}%";
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            suggestions.Add(new IngredientSuggestion(
+                reader.GetInt32(0),
+                reader.GetString(1)));
+        }
+
+        return suggestions;
+    }
+
+    public async Task<List<string>> GetIngredientNamesAsync(
+        IReadOnlyCollection<int> ingredientIds,
+        CancellationToken cancellationToken = default)
+    {
+        var names = new List<string>();
+        await using var connection =
+            await _sqlFactory.CreateConnectionAsync(cancellationToken);
+
+        await connection.OpenAsync(cancellationToken);
+
+        const string sql = """
+            SELECT i.IngredientName
+            FROM OPENJSON(@IngredientIdsJson)
+            WITH (IngredientID int '$') AS selected
+            INNER JOIN Ingredients AS i
+                ON i.IngredientID = selected.IngredientID
+            ORDER BY i.IngredientName;
+            """;
+
+        await using var command = new SqlCommand(sql, connection);
+        command.Parameters.Add("@IngredientIdsJson", SqlDbType.NVarChar, -1)
+            .Value = JsonSerializer.Serialize(ingredientIds);
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            names.Add(reader.GetString(0));
+        }
+
+        return names;
+    }
+
+    public async Task<List<Recipe>> GetAllRecipesAsync(
+        CancellationToken cancellationToken = default)
     {
         var recipes = new List<Recipe>();
 
         await using var connection =
-            await _sqlFactory.CreateConnectionAsync();
+            await _sqlFactory.CreateConnectionAsync(cancellationToken);
 
-        await connection.OpenAsync();
+        await connection.OpenAsync(cancellationToken);
 
         const string sql = @"
             SELECT
@@ -40,9 +105,9 @@ public class RecipeService
 
         await using var command = new SqlCommand(sql, connection);
 
-        await using var reader = await command.ExecuteReaderAsync();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
-        while (await reader.ReadAsync())
+        while (await reader.ReadAsync(cancellationToken))
         {
             recipes.Add(new Recipe
             {
@@ -62,14 +127,16 @@ public class RecipeService
 
     public async Task<List<RecipeSearchResult>> GetMatchingRecipesAsync(
         IReadOnlyCollection<int> ingredientIds,
-        IReadOnlyCollection<string> ingredientNames)
+        IReadOnlyCollection<string> ingredientNames,
+        CancellationToken cancellationToken = default,
+        int? maximumResults = null)
     {
         var recipes = new List<RecipeSearchResult>();
 
         await using var connection =
-            await _sqlFactory.CreateConnectionAsync();
+            await _sqlFactory.CreateConnectionAsync(cancellationToken);
 
-        await connection.OpenAsync();
+        await connection.OpenAsync(cancellationToken);
 
         const string sql = """
             WITH SelectedIngredients AS (
@@ -105,6 +172,10 @@ public class RecipeService
                 INNER JOIN RecipeIngredients AS ri
                     ON ri.RecipeID = mr.RecipeID
                 GROUP BY mr.RecipeID, mr.MatchingIngredientCount
+            ),
+            SelectedIngredientCount AS (
+                SELECT COUNT(*) AS Count
+                FROM SelectedIngredients
             )
             SELECT
                 r.RecipeID,
@@ -118,6 +189,11 @@ public class RecipeService
                 ric.MatchingIngredientCount,
                 ric.TotalIngredientCount - ric.MatchingIngredientCount
                     AS MissingIngredientCount,
+                CAST(
+                    ric.MatchingIngredientCount * 100.0 /
+                    NULLIF(sic.Count, 0)
+                    AS decimal(5, 2)
+                ) AS MatchPercentage,
                 (
                     SELECT i.IngredientName AS [Name]
                     FROM RecipeIngredients AS ri
@@ -144,12 +220,14 @@ public class RecipeService
                     FOR JSON PATH
                 ) AS MissingIngredientsJson
             FROM RecipeIngredientCounts AS ric
+            CROSS JOIN SelectedIngredientCount AS sic
             INNER JOIN Recipes AS r
                 ON r.RecipeID = ric.RecipeID
             ORDER BY
                 ric.MatchingIngredientCount DESC,
+                MatchPercentage DESC,
                 ric.TotalIngredientCount - ric.MatchingIngredientCount ASC,
-                r.DateAdded DESC;
+                r.DateAdded DESC
             """;
 
         await using var command = new SqlCommand(sql, connection);
@@ -158,9 +236,16 @@ public class RecipeService
         command.Parameters.Add("@IngredientNamesJson", SqlDbType.NVarChar, -1)
             .Value = JsonSerializer.Serialize(ingredientNames);
 
-        await using var reader = await command.ExecuteReaderAsync();
+        if (maximumResults is not null)
+        {
+            command.CommandText += "\nOFFSET 0 ROWS FETCH NEXT @MaximumResults ROWS ONLY;";
+            command.Parameters.Add("@MaximumResults", SqlDbType.Int)
+                .Value = maximumResults.Value;
+        }
 
-        while (await reader.ReadAsync())
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+        while (await reader.ReadAsync(cancellationToken))
         {
             recipes.Add(new RecipeSearchResult
             {
@@ -174,8 +259,9 @@ public class RecipeService
                 DateAdded = reader.GetDateTime(7),
                 MatchingIngredientCount = reader.GetInt32(8),
                 MissingIngredientCount = reader.GetInt32(9),
-                MatchingIngredients = DeserializeIngredientNames(reader.GetString(10)),
-                MissingIngredients = DeserializeIngredientNames(reader.GetString(11))
+                MatchPercentage = reader.GetDecimal(10),
+                MatchingIngredients = DeserializeIngredientNames(reader.GetString(11)),
+                MissingIngredients = DeserializeIngredientNames(reader.GetString(12))
             });
         }
 
@@ -187,6 +273,15 @@ public class RecipeService
         return JsonSerializer.Deserialize<List<IngredientNameJson>>(json)?
             .Select(ingredient => ingredient.Name)
             .ToList() ?? [];
+    }
+
+    private static string EscapeLikePattern(string value)
+    {
+        return value
+            .Replace("\\", "\\\\", StringComparison.Ordinal)
+            .Replace("%", "\\%", StringComparison.Ordinal)
+            .Replace("_", "\\_", StringComparison.Ordinal)
+            .Replace("[", "\\[", StringComparison.Ordinal);
     }
 
     private sealed class IngredientNameJson

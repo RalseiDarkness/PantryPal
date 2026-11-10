@@ -3,6 +3,7 @@ using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
+using Microsoft.Maui.ApplicationModel;
 using PantryPal.Models;
 using PantryPal.Services;
 
@@ -10,15 +11,29 @@ namespace PantryPal.ViewModels;
 
 public partial class RecipeSearchViewModel : ObservableObject
 {
-    private readonly PantryService _pantryService;
     private readonly RecipeApiService _recipeApiService;
     private readonly ILogger<RecipeSearchViewModel> _logger;
+    private CancellationTokenSource? _suggestionSearchCancellation;
+
+    public ObservableCollection<IngredientSuggestion> Suggestions { get; } = [];
+
+    public ObservableCollection<IngredientSuggestion> SelectedIngredients { get; } = [];
 
     public ObservableCollection<RecipeSearchResult> Recipes { get; } = [];
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasNoSuggestions))]
+    private string ingredientQuery = string.Empty;
+
+    [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsNotBusy))]
+    [NotifyPropertyChangedFor(nameof(CanSearchRecipes))]
     private bool isBusy;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSuggestionError))]
+    [NotifyPropertyChangedFor(nameof(HasNoSuggestions))]
+    private string? suggestionErrorMessage;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasError))]
@@ -28,24 +43,167 @@ public partial class RecipeSearchViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(HasEmptyMessage))]
     private string? emptyMessage;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasAiStatusMessage))]
+    private string? aiStatusMessage;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasRecommendationMessage))]
+    private string? recommendationMessage;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasNoSuggestions))]
+    private bool isSearchingIngredients;
+
     public bool IsNotBusy => !IsBusy;
+
+    public bool CanSearchRecipes => !IsBusy && SelectedIngredients.Count > 0;
+
+    public bool HasSuggestions => Suggestions.Count > 0;
+
+    public bool HasNoSuggestions =>
+        IngredientQuery.Trim().Length >= 2 &&
+        !IsSearchingIngredients &&
+        Suggestions.Count == 0 &&
+        !HasSuggestionError;
+
+    public bool HasSuggestionError =>
+        !string.IsNullOrWhiteSpace(SuggestionErrorMessage);
 
     public bool HasError => !string.IsNullOrWhiteSpace(ErrorMessage);
 
     public bool HasEmptyMessage => !string.IsNullOrWhiteSpace(EmptyMessage);
 
+    public bool HasAiStatusMessage => !string.IsNullOrWhiteSpace(AiStatusMessage);
+
+    public bool HasRecommendationMessage =>
+        !string.IsNullOrWhiteSpace(RecommendationMessage);
+
     public bool HasRecipes => Recipes.Count > 0;
 
+    public bool HasNoSelectedIngredients => SelectedIngredients.Count == 0;
+
     public RecipeSearchViewModel(
-        PantryService pantryService,
         RecipeApiService recipeApiService,
         ILogger<RecipeSearchViewModel> logger)
     {
-        _pantryService = pantryService;
         _recipeApiService = recipeApiService;
         _logger = logger;
 
+        Suggestions.CollectionChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(HasSuggestions));
+            OnPropertyChanged(nameof(HasNoSuggestions));
+        };
+        SelectedIngredients.CollectionChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(CanSearchRecipes));
+            OnPropertyChanged(nameof(HasNoSelectedIngredients));
+        };
         Recipes.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasRecipes));
+    }
+
+    partial void OnIngredientQueryChanged(string value)
+    {
+        _suggestionSearchCancellation?.Cancel();
+        _suggestionSearchCancellation?.Dispose();
+        Suggestions.Clear();
+        SuggestionErrorMessage = null;
+
+        var query = value.Trim();
+        if (query.Length < 2)
+        {
+            IsSearchingIngredients = false;
+            return;
+        }
+
+        var cancellation = new CancellationTokenSource();
+        _suggestionSearchCancellation = cancellation;
+        IsSearchingIngredients = true;
+        _ = LoadSuggestionsAsync(query, cancellation);
+    }
+
+    private async Task LoadSuggestionsAsync(
+        string query,
+        CancellationTokenSource cancellation)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(300), cancellation.Token);
+            var suggestions = await _recipeApiService.SearchIngredientsAsync(
+                query,
+                cancellation.Token);
+
+            if (cancellation.IsCancellationRequested)
+            {
+                return;
+            }
+
+            var selectedIds = SelectedIngredients
+                .Select(ingredient => ingredient.IngredientID)
+                .ToHashSet();
+            var selectedNames = SelectedIngredients
+                .Select(ingredient => ingredient.IngredientName)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            Suggestions.Clear();
+            foreach (var suggestion in suggestions.Where(
+                         ingredient =>
+                             !selectedIds.Contains(ingredient.IngredientID) &&
+                             !selectedNames.Contains(ingredient.IngredientName)))
+            {
+                Suggestions.Add(suggestion);
+            }
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex) when (
+            ex is HttpRequestException or
+                JsonException or
+                InvalidOperationException or
+                OperationCanceledException)
+        {
+            if (!cancellation.IsCancellationRequested)
+            {
+                _logger.LogError(ex, "Ingredient autocomplete failed.");
+                SuggestionErrorMessage =
+                    $"Could not load ingredient suggestions: {ex.Message}";
+            }
+        }
+        finally
+        {
+            if (ReferenceEquals(_suggestionSearchCancellation, cancellation))
+            {
+                IsSearchingIngredients = false;
+            }
+
+            cancellation.Dispose();
+        }
+    }
+
+    public void SelectIngredient(IngredientSuggestion ingredient)
+    {
+        if (SelectedIngredients.Any(
+                selected =>
+                    selected.IngredientID == ingredient.IngredientID ||
+                    string.Equals(
+                        selected.IngredientName,
+                        ingredient.IngredientName,
+                        StringComparison.OrdinalIgnoreCase)))
+        {
+            return;
+        }
+
+        SelectedIngredients.Add(ingredient);
+        IngredientQuery = string.Empty;
+        SuggestionErrorMessage = null;
+        ErrorMessage = null;
+    }
+
+    public void RemoveIngredient(IngredientSuggestion ingredient)
+    {
+        SelectedIngredients.Remove(ingredient);
     }
 
     [RelayCommand]
@@ -56,38 +214,46 @@ public partial class RecipeSearchViewModel : ObservableObject
             return;
         }
 
+        if (SelectedIngredients.Count == 0)
+        {
+            EmptyMessage = "Select at least one ingredient before searching.";
+            return;
+        }
+
         IsBusy = true;
         ErrorMessage = null;
         EmptyMessage = null;
+        AiStatusMessage = null;
+        RecommendationMessage = null;
         Recipes.Clear();
 
         try
         {
-            var ingredientNames = _pantryService.Load()
-                .Where(item => item is not null)
-                .Select(item => item.Name?.Trim())
-                .Where(name => !string.IsNullOrWhiteSpace(name))
-                .Select(name => name!)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToArray();
+            var response = await _recipeApiService.GetRecommendationsAsync(
+                SelectedIngredients.Select(ingredient => ingredient.IngredientID)
+                    .ToArray());
 
-            if (ingredientNames.Length == 0)
-            {
-                EmptyMessage = "Your pantry is empty. Add ingredients before searching for recipes.";
-                return;
-            }
-
-            var results = await _recipeApiService.SearchByIngredientNamesAsync(
-                ingredientNames);
-
-            foreach (var recipe in results)
+            foreach (var recipe in response.Recipes)
             {
                 Recipes.Add(recipe);
             }
 
-            if (results.Count == 0)
+            AiStatusMessage = response.AiError;
+            if (response.Recipes.Count == 0)
             {
-                EmptyMessage = "No recipes matched the ingredients saved in your pantry.";
+                EmptyMessage = "No recipes matched the selected ingredients.";
+            }
+            else if (response.AiAvailable &&
+                     response.BestRecipeId is int bestRecipeId &&
+                     !string.IsNullOrWhiteSpace(response.Recommendation))
+            {
+                var bestRecipe = response.Recipes.FirstOrDefault(
+                    recipe => recipe.RecipeID == bestRecipeId);
+                if (bestRecipe is not null)
+                {
+                    RecommendationMessage =
+                        $"Top recommendation: {bestRecipe.Title}. {response.Recommendation}";
+                }
             }
         }
         catch (Exception ex) when (
@@ -98,12 +264,40 @@ public partial class RecipeSearchViewModel : ObservableObject
                 TaskCanceledException or
                 InvalidOperationException)
         {
-            _logger.LogError(ex, "Recipe search failed.");
-            ErrorMessage = $"Could not search for recipes: {ex.Message}";
+            _logger.LogError(ex, "Recipe recommendations failed.");
+            ErrorMessage = $"Could not find recipes: {ex.Message}";
         }
         finally
         {
             IsBusy = false;
+        }
+    }
+
+    [RelayCommand]
+    private void ToggleInstructions(RecipeSearchResult recipe)
+    {
+        recipe.IsInstructionsVisible = !recipe.IsInstructionsVisible;
+    }
+
+    [RelayCommand]
+    private async Task OpenRecipeSourceAsync(RecipeSearchResult recipe)
+    {
+        if (!Uri.TryCreate(recipe.SourceUrl, UriKind.Absolute, out var sourceUri) ||
+            (sourceUri.Scheme != Uri.UriSchemeHttp &&
+             sourceUri.Scheme != Uri.UriSchemeHttps))
+        {
+            ErrorMessage = "This recipe does not have a valid source link.";
+            return;
+        }
+
+        try
+        {
+            await Launcher.OpenAsync(sourceUri);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Could not open recipe source {SourceUrl}.", recipe.SourceUrl);
+            ErrorMessage = "Could not open the recipe source link.";
         }
     }
 }

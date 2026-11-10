@@ -21,7 +21,7 @@ public static class MauiProgram
 		builder.Services.AddSingleton<PantryService>();
 		builder.Services.AddSingleton(_ => new HttpClient
 		{
-			Timeout = TimeSpan.FromSeconds(30)
+			Timeout = TimeSpan.FromSeconds(75)
 		});
 		builder.Services.AddSingleton<RecipeApiService>();
 		builder.Services.AddTransient<RecipeSearchViewModel>();

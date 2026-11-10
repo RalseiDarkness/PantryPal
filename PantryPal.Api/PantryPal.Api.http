@@ -1,4 +1,32 @@
 @PantryPal.Api_HostAddress = http://localhost:5222
+@ingredientId = 1
+
+### Find ingredients for the autocomplete dropdown
+GET {{PantryPal.Api_HostAddress}}/api/ingredients/search?query=tom
+Accept: application/json
+
+###
+
+### Find recipes and request AI recommendations
+# Replace with an IngredientID returned by the autocomplete request above.
+POST {{PantryPal.Api_HostAddress}}/api/recipes/recommendations
+Content-Type: application/json
+
+{
+  "ingredientIds": [{{ingredientId}}]
+}
+
+###
+
+### Empty ingredient selection is rejected
+POST {{PantryPal.Api_HostAddress}}/api/recipes/recommendations
+Content-Type: application/json
+
+{
+  "ingredientIds": []
+}
+
+###
 
 GET {{PantryPal.Api_HostAddress}}/api/recipes
 Accept: application/json

@@ -7,6 +7,7 @@ public static class ApiSettings
 #if DEBUG
     private const string MacCatalystDevelopmentBaseAddress = "http://localhost:5222/";
     private const string AndroidEmulatorDevelopmentBaseAddress = "http://10.0.2.2:5222/";
+    private const string WindowsDevelopmentBaseAddress = "http://localhost:5222/";
 #endif
 
     public static Uri GetBaseAddress()
@@ -25,6 +26,7 @@ public static class ApiSettings
         {
             DevicePlatform.MacCatalyst => new Uri(MacCatalystDevelopmentBaseAddress),
             DevicePlatform.Android => new Uri(AndroidEmulatorDevelopmentBaseAddress),
+            DevicePlatform.WinUI => new Uri(WindowsDevelopmentBaseAddress),
             _ => new Uri(MacCatalystDevelopmentBaseAddress)
         };
 #else

@@ -15,12 +15,14 @@ public class SqlConnectionFactory
     private const string Database =
         "Sophomore-Project-DB";
 
-    public async Task<SqlConnection> CreateConnectionAsync()
+    public async Task<SqlConnection> CreateConnectionAsync(
+        CancellationToken cancellationToken = default)
     {
         var token = await _credential.GetTokenAsync(
             new TokenRequestContext(
                 new[] { "https://database.windows.net/.default" }
-            )
+            ),
+            cancellationToken
         );
 
         var connectionString =
