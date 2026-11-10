@@ -19,6 +19,7 @@ public static class MauiProgram
 			});
 
 		builder.Services.AddSingleton<PantryService>();
+		builder.Services.AddSingleton<ApiProcessManager>();
 		builder.Services.AddSingleton(_ => new HttpClient
 		{
 			Timeout = TimeSpan.FromSeconds(75)

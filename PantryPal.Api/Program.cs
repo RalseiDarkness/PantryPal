@@ -25,6 +25,12 @@ builder.Services.AddOpenApi();
 var app = builder.Build();
 app.UseExceptionHandler();
 
+app.MapGet("/health", () => Results.Ok(new { status = "Ready" }))
+    .WithName("GetApiHealth")
+    .WithSummary("Check whether the API process is ready.")
+    .WithDescription("Returns readiness without connecting to Azure SQL or Azure AI.")
+    .Produces(StatusCodes.Status200OK);
+
 app.MapGet("/api/recipes", async (
     RecipeService recipeService,
     CancellationToken cancellationToken) =>

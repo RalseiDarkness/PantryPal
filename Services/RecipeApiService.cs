@@ -10,10 +10,14 @@ public class RecipeApiService
         new(JsonSerializerDefaults.Web);
 
     private readonly HttpClient _httpClient;
+    private readonly ApiProcessManager _apiProcessManager;
 
-    public RecipeApiService(HttpClient httpClient)
+    public RecipeApiService(
+        HttpClient httpClient,
+        ApiProcessManager apiProcessManager)
     {
         _httpClient = httpClient;
+        _apiProcessManager = apiProcessManager;
     }
 
     public Task<List<RecipeSearchResult>> SearchByIngredientNamesAsync(
@@ -55,6 +59,7 @@ public class RecipeApiService
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(query);
+        await _apiProcessManager.EnsureStartedAsync(cancellationToken);
 
         var requestUri = new Uri(
             ApiSettings.GetBaseAddress(),
@@ -82,6 +87,7 @@ public class RecipeApiService
                 nameof(ingredientIds));
         }
 
+        await _apiProcessManager.EnsureStartedAsync(cancellationToken);
         var requestUri = new Uri(
             ApiSettings.GetBaseAddress(),
             "api/recipes/recommendations");
@@ -104,6 +110,7 @@ public class RecipeApiService
         RecipeSearchRequest request,
         CancellationToken cancellationToken)
     {
+        await _apiProcessManager.EnsureStartedAsync(cancellationToken);
         var requestUri = new Uri(
             ApiSettings.GetBaseAddress(),
             "api/recipes/search");
