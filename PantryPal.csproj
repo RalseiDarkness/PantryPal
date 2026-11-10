@@ -80,5 +80,7 @@
 	    <Generator>MSBuild:Compile</Generator>
 	  </MauiXaml>
 	</ItemGroup>
-
+	<ItemGroup>
+		<Compile Remove="PantryPal.Api/**/*.cs" />
+	</ItemGroup>
 </Project>

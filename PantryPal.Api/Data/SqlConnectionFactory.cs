@@ -1,13 +1,12 @@
 
 using Azure.Core;
-using Azure.Identity;
 using Microsoft.Data.SqlClient;
 
 namespace PantryPal.Api.Data;
 
 public class SqlConnectionFactory
 {
-    private readonly DefaultAzureCredential _credential = new();
+    private readonly TokenCredential _credential;
 
     private const string Server =
         "grantsazureserver.database.windows.net";
@@ -15,9 +14,15 @@ public class SqlConnectionFactory
     private const string Database =
         "Sophomore-Project-DB";
 
+    public SqlConnectionFactory(TokenCredential credential)
+    {
+        _credential = credential;
+    }
+
     public async Task<SqlConnection> CreateConnectionAsync(
         CancellationToken cancellationToken = default)
     {
+        
         var token = await _credential.GetTokenAsync(
             new TokenRequestContext(
                 new[] { "https://database.windows.net/.default" }

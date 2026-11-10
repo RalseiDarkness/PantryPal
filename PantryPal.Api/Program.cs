@@ -1,11 +1,14 @@
 using Azure.Identity;
+using Azure.Core;
 using PantryPal.Api.Data;
 using PantryPal.Api.Middleware;
 using PantryPal.Api.Models;
 using PantryPal.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddSingleton<DefaultAzureCredential>();
+// Local development: use the Azure CLI account verified with
+// `az account get-access-token --resource https://database.windows.net/`.
+builder.Services.AddSingleton<TokenCredential>(_ => new AzureCliCredential());
 builder.Services.AddSingleton<SqlConnectionFactory>();
 builder.Services.AddScoped<RecipeService>();
 builder.Services.AddScoped<RecipeRecommendationService>();
@@ -34,7 +37,8 @@ app.MapGet("/api/recipes", async (
 app.MapGet("/api/ingredients/search", async (
     string? query,
     RecipeService recipeService,
-    CancellationToken cancellationToken) =>
+    CancellationToken cancellationToken,
+    ILogger<Program> logger) =>
 {
     if (string.IsNullOrWhiteSpace(query) || query.Trim().Length > 100)
     {
@@ -44,11 +48,21 @@ app.MapGet("/api/ingredients/search", async (
         });
     }
 
-    var suggestions = await recipeService.SearchIngredientsAsync(
-        query,
-        cancellationToken);
+    try
+    {
+        var suggestions = await recipeService.SearchIngredientsAsync(
+            query,
+            cancellationToken);
 
-    return Results.Ok(suggestions);
+        return Results.Ok(suggestions);
+    }
+    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+    {
+        logger.LogDebug(
+            "Ingredient search request was canceled by the client.");
+
+        return Results.StatusCode(StatusCodes.Status499ClientClosedRequest);
+    }
 })
 .WithName("SearchIngredients")
 .WithSummary("Search ingredient names for autocomplete suggestions.")

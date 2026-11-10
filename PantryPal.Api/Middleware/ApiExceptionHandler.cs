@@ -29,7 +29,9 @@ public sealed class ApiExceptionHandler : IExceptionHandler
                 (StatusCodes.Status400BadRequest,
                     "Invalid request",
                     exception.Message),
-            _ => (0, string.Empty, string.Empty)
+            _ => (StatusCodes.Status500InternalServerError,
+                "An error occurred while processing your request.",
+                "The server encountered an unexpected error.")
         };
 
         if (statusCode == 0)

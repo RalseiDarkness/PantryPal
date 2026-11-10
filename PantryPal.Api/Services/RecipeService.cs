@@ -260,8 +260,10 @@ public class RecipeService
                 MatchingIngredientCount = reader.GetInt32(8),
                 MissingIngredientCount = reader.GetInt32(9),
                 MatchPercentage = reader.GetDecimal(10),
-                MatchingIngredients = DeserializeIngredientNames(reader.GetString(11)),
-                MissingIngredients = DeserializeIngredientNames(reader.GetString(12))
+                MatchingIngredients = DeserializeIngredientNames(
+                    reader.IsDBNull(11) ? "[]" : reader.GetString(11)),
+                MissingIngredients = DeserializeIngredientNames(
+                    reader.IsDBNull(12) ? "[]" : reader.GetString(12))
             });
         }
 

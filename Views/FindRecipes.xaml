@@ -25,7 +25,9 @@
                 Placeholder="Type an ingredient (at least 2 characters)"
                 Text="{Binding IngredientQuery}"
                 ReturnType="Search"
-                ClearButtonVisibility="WhileEditing" />
+                ClearButtonVisibility="WhileEditing"
+                TextColor="#30271F"
+                PlaceholderColor="#665A50" />
 
             <HorizontalStackLayout
                 Spacing="8"
@@ -47,7 +49,10 @@
                             Margin="0,0,0,4"
                             BackgroundColor="White"
                             Stroke="#E5D9CC">
-                            <Label Text="{Binding IngredientName}" FontSize="15" />
+                            <Label
+                                Text="{Binding IngredientName}"
+                                FontSize="15"
+                                TextColor="#30271F" />
                         </Border>
                     </DataTemplate>
                 </CollectionView.ItemTemplate>
@@ -220,15 +225,22 @@
 
                             <Label
                                 Text="{Binding MatchingIngredientCount, StringFormat='Ingredients you selected that this recipe uses: {0}'}"
-                                FontSize="13" />
+                                FontSize="13"
+                                TextColor="#665A50" />
 
-                            <Label Text="Already in your selection:" FontAttributes="Bold" />
+                            <Label
+                                Text="Already in your selection:"
+                                FontAttributes="Bold"
+                                TextColor="#30271F" />
                             <VerticalStackLayout
                                 BindableLayout.ItemsSource="{Binding MatchingIngredients}"
                                 Spacing="2">
                                 <BindableLayout.ItemTemplate>
                                     <DataTemplate x:DataType="x:String">
-                                        <Label Text="{Binding ., StringFormat='• {0}'}" FontSize="13" />
+                                        <Label
+                                            Text="{Binding ., StringFormat='• {0}'}"
+                                            FontSize="13"
+                                            TextColor="#665A50" />
                                     </DataTemplate>
                                 </BindableLayout.ItemTemplate>
                             </VerticalStackLayout>
@@ -248,13 +260,19 @@
                                 </BindableLayout.ItemTemplate>
                             </VerticalStackLayout>
 
-                            <Label Text="Substitution ideas:" FontAttributes="Bold" />
+                            <Label
+                                Text="Substitution ideas:"
+                                FontAttributes="Bold"
+                                TextColor="#30271F" />
                             <VerticalStackLayout
                                 BindableLayout.ItemsSource="{Binding Substitutions}"
                                 Spacing="2">
                                 <BindableLayout.ItemTemplate>
                                     <DataTemplate x:DataType="x:String">
-                                        <Label Text="{Binding ., StringFormat='• {0}'}" FontSize="13" />
+                                        <Label
+                                            Text="{Binding ., StringFormat='• {0}'}"
+                                            FontSize="13"
+                                            TextColor="#665A50" />
                                     </DataTemplate>
                                 </BindableLayout.ItemTemplate>
                             </VerticalStackLayout>

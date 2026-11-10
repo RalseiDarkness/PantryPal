@@ -106,7 +106,6 @@ public partial class RecipeSearchViewModel : ObservableObject
     partial void OnIngredientQueryChanged(string value)
     {
         _suggestionSearchCancellation?.Cancel();
-        _suggestionSearchCancellation?.Dispose();
         Suggestions.Clear();
         SuggestionErrorMessage = null;
 
@@ -178,7 +177,6 @@ public partial class RecipeSearchViewModel : ObservableObject
                 IsSearchingIngredients = false;
             }
 
-            cancellation.Dispose();
         }
     }
 

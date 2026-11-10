@@ -38,12 +38,12 @@ public sealed class AzureAiRecipeAnalysisService
 
     private readonly HttpClient _httpClient;
     private readonly IConfiguration _configuration;
-    private readonly DefaultAzureCredential _credential;
+    private readonly TokenCredential _credential;
 
     public AzureAiRecipeAnalysisService(
         HttpClient httpClient,
         IConfiguration configuration,
-        DefaultAzureCredential credential)
+        TokenCredential credential)
     {
         _httpClient = httpClient;
         _configuration = configuration;

@@ -1,3 +1,4 @@
+
 namespace PantryPal.Services;
 
 public static class ApiSettings
@@ -22,13 +23,22 @@ public static class ApiSettings
         }
 
 #if DEBUG
-        return DeviceInfo.Platform switch
+        if (DeviceInfo.Platform == DevicePlatform.Android)
         {
-            DevicePlatform.MacCatalyst => new Uri(MacCatalystDevelopmentBaseAddress),
-            DevicePlatform.Android => new Uri(AndroidEmulatorDevelopmentBaseAddress),
-            DevicePlatform.WinUI => new Uri(WindowsDevelopmentBaseAddress),
-            _ => new Uri(MacCatalystDevelopmentBaseAddress)
-        };
+            return new Uri(AndroidEmulatorDevelopmentBaseAddress);
+        }
+
+        if (DeviceInfo.Platform == DevicePlatform.WinUI)
+        {
+            return new Uri(WindowsDevelopmentBaseAddress);
+        }
+
+        if (DeviceInfo.Platform == DevicePlatform.MacCatalyst)
+        {
+            return new Uri(MacCatalystDevelopmentBaseAddress);
+        }
+
+        return new Uri(MacCatalystDevelopmentBaseAddress);
 #else
         throw new InvalidOperationException(
             "Configure the PantryPal API base address before searching for recipes.");

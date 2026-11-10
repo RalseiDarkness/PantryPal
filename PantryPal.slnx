@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="PantryPal.Api/PantryPal.Api.csproj" />
+  <Project Path="PantryPal.csproj" />
+</Solution>
