@@ -13,7 +13,9 @@ public partial class RecipeSearchViewModel : ObservableObject
 {
     private readonly RecipeApiService _recipeApiService;
     private readonly ILogger<RecipeSearchViewModel> _logger;
+    private readonly object _suggestionSearchLock = new();
     private CancellationTokenSource? _suggestionSearchCancellation;
+    private int _suggestionSearchVersion;
 
     public ObservableCollection<IngredientSuggestion> Suggestions { get; } = [];
 
@@ -106,89 +108,106 @@ public partial class RecipeSearchViewModel : ObservableObject
     partial void OnIngredientQueryChanged(string value)
     {
         _suggestionSearchCancellation?.Cancel();
+        _suggestionSearchCancellation?.Dispose();
         Suggestions.Clear();
         SuggestionErrorMessage = null;
 
-        var query = value.Trim();
         if (query.Length < 2)
         {
             IsSearchingIngredients = false;
             return;
         }
 
-        var cancellation = new CancellationTokenSource();
-        _suggestionSearchCancellation = cancellation;
         IsSearchingIngredients = true;
-        _ = LoadSuggestionsAsync(query, cancellation);
+        _ = LoadSuggestionsAsync(
+            query,
+            cancellation!,
+            cancellation!.Token,
+            version);
     }
 
     private async Task LoadSuggestionsAsync(
         string query,
-        CancellationTokenSource cancellation)
+        CancellationTokenSource cancellation,
+        CancellationToken cancellationToken,
+        int version)
     {
         try
         {
-            await Task.Delay(TimeSpan.FromMilliseconds(300), cancellation.Token);
+            await Task.Delay(TimeSpan.FromMilliseconds(300), cancellationToken);
             var suggestions = await _recipeApiService.SearchIngredientsAsync(
                 query,
-                cancellation.Token);
+                cancellationToken);
 
-            if (cancellation.IsCancellationRequested)
+            await MainThread.InvokeOnMainThreadAsync(() =>
             {
-                return;
-            }
+                if (version != Volatile.Read(ref _suggestionSearchVersion) ||
+                    cancellationToken.IsCancellationRequested)
+                {
+                    return;
+                }
 
-            var selectedIds = SelectedIngredients
-                .Select(ingredient => ingredient.IngredientID)
-                .ToHashSet();
-            var selectedNames = SelectedIngredients
-                .Select(ingredient => ingredient.IngredientName)
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var selectedNames = SelectedIngredients
+                    .Select(ingredient => ingredient.IngredientName)
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-            Suggestions.Clear();
-            foreach (var suggestion in suggestions.Where(
-                         ingredient =>
-                             !selectedIds.Contains(ingredient.IngredientID) &&
-                             !selectedNames.Contains(ingredient.IngredientName)))
-            {
-                Suggestions.Add(suggestion);
-            }
+                Suggestions.Clear();
+                foreach (var suggestion in suggestions.Where(
+                             ingredient => !selectedNames.Contains(ingredient.IngredientName)))
+                {
+                    Suggestions.Add(suggestion);
+                }
+            });
         }
-        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        catch (OperationCanceledException)
         {
         }
         catch (Exception ex) when (
             ex is HttpRequestException or
                 JsonException or
-                InvalidOperationException or
-                OperationCanceledException)
+                InvalidOperationException)
         {
-            if (!cancellation.IsCancellationRequested)
+            await MainThread.InvokeOnMainThreadAsync(() =>
             {
+                if (version != Volatile.Read(ref _suggestionSearchVersion) ||
+                    cancellationToken.IsCancellationRequested)
+                {
+                    return;
+                }
+
                 _logger.LogError(ex, "Ingredient autocomplete failed.");
                 SuggestionErrorMessage =
                     $"Could not load ingredient suggestions: {ex.Message}";
-            }
+            });
         }
         finally
         {
-            if (ReferenceEquals(_suggestionSearchCancellation, cancellation))
+            bool wasActive;
+            lock (_suggestionSearchLock)
             {
-                IsSearchingIngredients = false;
-            }
+                wasActive = ReferenceEquals(_suggestionSearchCancellation, cancellation);
+                if (wasActive)
+                {
+                    _suggestionSearchCancellation = null;
+                }
 
+            cancellation.Dispose();
         }
     }
 
     public void SelectIngredient(IngredientSuggestion ingredient)
     {
+        if (ingredient.IngredientIDs is null || ingredient.IngredientIDs.Count == 0)
+        {
+            ErrorMessage = "This ingredient suggestion has no database IDs. Please search again.";
+            return;
+        }
+
         if (SelectedIngredients.Any(
-                selected =>
-                    selected.IngredientID == ingredient.IngredientID ||
-                    string.Equals(
-                        selected.IngredientName,
-                        ingredient.IngredientName,
-                        StringComparison.OrdinalIgnoreCase)))
+                selected => string.Equals(
+                    selected.IngredientName,
+                    ingredient.IngredientName,
+                    StringComparison.OrdinalIgnoreCase)))
         {
             return;
         }
@@ -228,7 +247,8 @@ public partial class RecipeSearchViewModel : ObservableObject
         try
         {
             var response = await _recipeApiService.GetRecommendationsAsync(
-                SelectedIngredients.Select(ingredient => ingredient.IngredientID)
+                SelectedIngredients.SelectMany(ingredient => ingredient.IngredientIDs)
+                    .Distinct()
                     .ToArray());
 
             foreach (var recipe in response.Recipes)

@@ -66,7 +66,8 @@ app.MapGet("/api/ingredients/search", async (
 })
 .WithName("SearchIngredients")
 .WithSummary("Search ingredient names for autocomplete suggestions.")
-.WithDescription("Returns up to 10 ingredient records whose names contain the query.")
+.WithDescription(
+    "Returns up to 10 case-insensitive matches, prioritizing names and words that start with the query.")
 .Produces<List<IngredientSuggestion>>(StatusCodes.Status200OK)
 .Produces(StatusCodes.Status400BadRequest);
 
@@ -156,8 +157,6 @@ app.MapGet("/health/database", async (
     {
         await using var connection =
             await sqlFactory.CreateConnectionAsync(cancellationToken);
-
-        await connection.OpenAsync(cancellationToken);
 
         await using var command =
             new Microsoft.Data.SqlClient.SqlCommand(

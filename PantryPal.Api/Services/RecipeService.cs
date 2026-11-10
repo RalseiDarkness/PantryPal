@@ -24,25 +24,103 @@ public class RecipeService
         await using var connection =
             await _sqlFactory.CreateConnectionAsync(cancellationToken);
 
-        await connection.OpenAsync(cancellationToken);
-
+        var escapedQuery = EscapeLikePattern(query.Trim());
         const string sql = """
-            SELECT TOP (10) IngredientID, IngredientName
-            FROM Ingredients
-            WHERE IngredientName LIKE @SearchPattern ESCAPE '\'
-            ORDER BY IngredientName;
+            WITH MatchingNames AS (
+                SELECT
+                    IngredientName COLLATE Latin1_General_100_BIN2 AS NameKey,
+                    DATALENGTH(IngredientName) AS NameByteLength,
+                    MIN(CASE
+                        WHEN IngredientName COLLATE Latin1_General_100_CI_AS
+                            LIKE @PrefixPattern ESCAPE '\' THEN 0
+                        WHEN IngredientName COLLATE Latin1_General_100_CI_AS
+                            LIKE @WordPrefixPattern ESCAPE '\' THEN 1
+                        ELSE 2
+                    END) AS MatchRank,
+                    MIN(IngredientID) AS DisplayIngredientID
+                FROM Ingredients
+                WHERE IngredientName COLLATE Latin1_General_100_CI_AS
+                    LIKE @ContainsPattern ESCAPE '\'
+                GROUP BY
+                    IngredientName COLLATE Latin1_General_100_BIN2,
+                    DATALENGTH(IngredientName)
+            ),
+            TopNames AS (
+                SELECT TOP (10)
+                    NameKey,
+                    NameByteLength,
+                    MatchRank,
+                    DisplayIngredientID
+                FROM MatchingNames
+                ORDER BY MatchRank, NameKey, NameByteLength, DisplayIngredientID
+            ),
+            SelectedNames AS (
+                SELECT
+                    ROW_NUMBER() OVER (
+                        ORDER BY
+                            names.MatchRank,
+                            names.NameKey,
+                            names.NameByteLength,
+                            names.DisplayIngredientID
+                    ) AS NameOrdinal,
+                    displayName.IngredientName,
+                    names.NameKey,
+                    names.NameByteLength
+                FROM TopNames AS names
+                INNER JOIN Ingredients AS displayName
+                    ON displayName.IngredientID = names.DisplayIngredientID
+            )
+            SELECT
+                selected.NameOrdinal,
+                selected.IngredientName,
+                ingredient.IngredientID
+            FROM SelectedNames AS selected
+            INNER JOIN Ingredients AS ingredient
+                ON ingredient.IngredientName COLLATE Latin1_General_100_BIN2
+                    = selected.NameKey
+                    AND DATALENGTH(ingredient.IngredientName) =
+                        selected.NameByteLength
+            ORDER BY selected.NameOrdinal, ingredient.IngredientID;
             """;
 
         await using var command = new SqlCommand(sql, connection);
-        command.Parameters.Add("@SearchPattern", SqlDbType.NVarChar, 202)
-            .Value = $"%{EscapeLikePattern(query.Trim())}%";
+        command.Parameters.Add("@PrefixPattern", SqlDbType.NVarChar, 202)
+            .Value = $"{escapedQuery}%";
+        command.Parameters.Add("@WordPrefixPattern", SqlDbType.NVarChar, 214)
+            .Value = $"%[^a-zA-Z0-9]{escapedQuery}%";
+        command.Parameters.Add("@ContainsPattern", SqlDbType.NVarChar, 402)
+            .Value = $"%{escapedQuery}%";
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        long currentNameOrdinal = 0;
+        string? currentName = null;
+        List<int>? currentIngredientIds = null;
+
         while (await reader.ReadAsync(cancellationToken))
         {
+            var nameOrdinal = reader.GetInt64(0);
+            if (nameOrdinal != currentNameOrdinal)
+            {
+                if (currentName is not null && currentIngredientIds is not null)
+                {
+                    suggestions.Add(new IngredientSuggestion(
+                        currentName,
+                        currentIngredientIds));
+                }
+
+                currentNameOrdinal = nameOrdinal;
+                currentName = reader.GetString(1);
+                currentIngredientIds = [];
+            }
+
+            currentIngredientIds!.Add(reader.GetInt32(2));
+        }
+
+        if (currentName is not null && currentIngredientIds is not null)
+        {
             suggestions.Add(new IngredientSuggestion(
-                reader.GetInt32(0),
-                reader.GetString(1)));
+                currentName,
+                currentIngredientIds));
         }
 
         return suggestions;
@@ -55,8 +133,6 @@ public class RecipeService
         var names = new List<string>();
         await using var connection =
             await _sqlFactory.CreateConnectionAsync(cancellationToken);
-
-        await connection.OpenAsync(cancellationToken);
 
         const string sql = """
             SELECT i.IngredientName
@@ -87,8 +163,6 @@ public class RecipeService
 
         await using var connection =
             await _sqlFactory.CreateConnectionAsync(cancellationToken);
-
-        await connection.OpenAsync(cancellationToken);
 
         const string sql = @"
             SELECT
@@ -136,41 +210,59 @@ public class RecipeService
         await using var connection =
             await _sqlFactory.CreateConnectionAsync(cancellationToken);
 
-        await connection.OpenAsync(cancellationToken);
-
         const string sql = """
-            WITH SelectedIngredients AS (
-                SELECT selected.IngredientID
+            WITH SelectedIngredientNameRows AS (
+                SELECT i.IngredientName
                 FROM OPENJSON(@IngredientIdsJson)
                 WITH (IngredientID int '$') AS selected
                 INNER JOIN Ingredients AS i
                     ON i.IngredientID = selected.IngredientID
 
-                UNION
+                UNION ALL
 
-                SELECT i.IngredientID
+                SELECT i.IngredientName
                 FROM OPENJSON(@IngredientNamesJson)
                 WITH (IngredientName nvarchar(4000) '$') AS selected
                 INNER JOIN Ingredients AS i
                     ON i.IngredientName = LTRIM(RTRIM(selected.IngredientName))
             ),
+            SelectedIngredients AS (
+                SELECT
+                    IngredientName COLLATE Latin1_General_100_BIN2 AS IngredientName,
+                    DATALENGTH(IngredientName) AS IngredientNameByteLength
+                FROM SelectedIngredientNameRows
+                GROUP BY
+                    IngredientName COLLATE Latin1_General_100_BIN2,
+                    DATALENGTH(IngredientName)
+            ),
+            RecipeIngredientsByName AS (
+                SELECT DISTINCT
+                    ri.RecipeID,
+                    i.IngredientName COLLATE Latin1_General_100_BIN2 AS IngredientName,
+                    DATALENGTH(i.IngredientName) AS IngredientNameByteLength
+                FROM RecipeIngredients AS ri
+                INNER JOIN Ingredients AS i
+                    ON i.IngredientID = ri.IngredientID
+            ),
             MatchingRecipes AS (
                 SELECT
-                    ri.RecipeID,
-                    COUNT(DISTINCT ri.IngredientID) AS MatchingIngredientCount
-                FROM RecipeIngredients AS ri
-                INNER JOIN SelectedIngredients AS si
-                    ON si.IngredientID = ri.IngredientID
-                GROUP BY ri.RecipeID
+                    recipeIngredient.RecipeID,
+                    COUNT(*) AS MatchingIngredientCount
+                FROM RecipeIngredientsByName AS recipeIngredient
+                INNER JOIN SelectedIngredients AS selected
+                    ON selected.IngredientName = recipeIngredient.IngredientName
+                    AND selected.IngredientNameByteLength =
+                        recipeIngredient.IngredientNameByteLength
+                GROUP BY recipeIngredient.RecipeID
             ),
             RecipeIngredientCounts AS (
                 SELECT
                     mr.RecipeID,
                     mr.MatchingIngredientCount,
-                    COUNT(DISTINCT ri.IngredientID) AS TotalIngredientCount
+                    COUNT(*) AS TotalIngredientCount
                 FROM MatchingRecipes AS mr
-                INNER JOIN RecipeIngredients AS ri
-                    ON ri.RecipeID = mr.RecipeID
+                INNER JOIN RecipeIngredientsByName AS recipeIngredient
+                    ON recipeIngredient.RecipeID = mr.RecipeID
                 GROUP BY mr.RecipeID, mr.MatchingIngredientCount
             ),
             SelectedIngredientCount AS (
@@ -195,28 +287,29 @@ public class RecipeService
                     AS decimal(5, 2)
                 ) AS MatchPercentage,
                 (
-                    SELECT i.IngredientName AS [Name]
-                    FROM RecipeIngredients AS ri
-                    INNER JOIN Ingredients AS i
-                        ON i.IngredientID = ri.IngredientID
-                    INNER JOIN SelectedIngredients AS si
-                        ON si.IngredientID = ri.IngredientID
-                    WHERE ri.RecipeID = r.RecipeID
-                    ORDER BY i.IngredientName
+                    SELECT recipeIngredient.IngredientName AS [Name]
+                    FROM RecipeIngredientsByName AS recipeIngredient
+                    INNER JOIN SelectedIngredients AS selected
+                        ON selected.IngredientName = recipeIngredient.IngredientName
+                        AND selected.IngredientNameByteLength =
+                            recipeIngredient.IngredientNameByteLength
+                    WHERE recipeIngredient.RecipeID = r.RecipeID
+                    ORDER BY recipeIngredient.IngredientName
                     FOR JSON PATH
                 ) AS MatchingIngredientsJson,
                 (
-                    SELECT i.IngredientName AS [Name]
-                    FROM RecipeIngredients AS ri
-                    INNER JOIN Ingredients AS i
-                        ON i.IngredientID = ri.IngredientID
-                    WHERE ri.RecipeID = r.RecipeID
+                    SELECT recipeIngredient.IngredientName AS [Name]
+                    FROM RecipeIngredientsByName AS recipeIngredient
+                    WHERE recipeIngredient.RecipeID = r.RecipeID
                       AND NOT EXISTS (
                           SELECT 1
-                          FROM SelectedIngredients AS si
-                          WHERE si.IngredientID = ri.IngredientID
+                          FROM SelectedIngredients AS selected
+                          WHERE selected.IngredientName =
+                              recipeIngredient.IngredientName
+                            AND selected.IngredientNameByteLength =
+                                recipeIngredient.IngredientNameByteLength
                       )
-                    ORDER BY i.IngredientName
+                    ORDER BY recipeIngredient.IngredientName
                     FOR JSON PATH
                 ) AS MissingIngredientsJson
             FROM RecipeIngredientCounts AS ric

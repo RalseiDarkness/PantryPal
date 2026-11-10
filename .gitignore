@@ -9,3 +9,7 @@ obj/
 
 # OS-generated files
 .DS_Store
+
+# Deployment artifacts
+PantryPal.Api.zip
+publish/

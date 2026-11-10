@@ -28,16 +28,20 @@ public sealed class RecipeRecommendationService
         CancellationToken cancellationToken = default)
     {
         var distinctIds = ingredientIds.Distinct().ToArray();
-        var selectedIngredients = await _recipeService.GetIngredientNamesAsync(
+        var resolvedIngredientNames = await _recipeService.GetIngredientNamesAsync(
             distinctIds,
             cancellationToken);
 
-        if (selectedIngredients.Count != distinctIds.Length)
+        if (resolvedIngredientNames.Count != distinctIds.Length)
         {
             throw new ArgumentException(
                 "One or more selected ingredients do not exist.",
                 nameof(ingredientIds));
         }
+
+        var selectedIngredients = resolvedIngredientNames
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
 
         var recipes = await _recipeService.GetMatchingRecipesAsync(
             distinctIds,

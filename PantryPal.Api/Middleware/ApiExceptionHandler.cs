@@ -25,6 +25,10 @@ public sealed class ApiExceptionHandler : IExceptionHandler
                 (StatusCodes.Status503ServiceUnavailable,
                     "Service unavailable",
                     "The database is temporarily unavailable."),
+            TimeoutException =>
+                (StatusCodes.Status503ServiceUnavailable,
+                    "Service unavailable",
+                    "The database is temporarily unavailable."),
             ArgumentException =>
                 (StatusCodes.Status400BadRequest,
                     "Invalid request",

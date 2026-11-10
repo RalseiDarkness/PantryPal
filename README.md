@@ -64,6 +64,13 @@ existing schema/columns already used by the recipe query:
 include a database schema export, so verify those columns and the Azure identity's
 permissions against the target database before the demo.
 
+The API connection factory uses managed identity and retries transient SQL
+connection errors (including auto-pause/resume timeouts) with 2, 4, 8, then
+10-second maximum backoff. Each connection attempt is capped at 15 seconds and
+the entire token-acquisition/connection process is capped at 100 seconds.
+Permanent credential, permission, and firewall errors are not retried. The API
+returns a service-unavailable response if the connection window expires.
+
 The AI integration uses the Azure OpenAI deployment-style chat-completions
 endpoint (`/openai/deployments/{deployment}/chat/completions`) and JSON-object
 responses. If your Foundry deployment exposes a different endpoint contract,
