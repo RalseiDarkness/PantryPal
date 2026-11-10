@@ -16,13 +16,21 @@
         <!-- Tabs and page name -->
         <controls:TabHeader PageTitle="Favorites" />
 
-        <Label Grid.Row="1" Text="Your saved recipes will show up here."
+        <!-- <Label Grid.Row="1" Text="Your saved recipes will show up here."
                TextColor="{StaticResource PantryMutedText}"
-               HorizontalOptions="Center" VerticalOptions="Center" />
+               HorizontalOptions="Center" VerticalOptions="Center" /> -->
 
         <CollectionView Grid.Row="1" 
                         ItemsSource="{Binding RecipesFavorites}" 
                         ItemsLayout="HorizontalList">
+
+            <CollectionView.EmptyView>
+                <VerticalStackLayout VerticalOptions="Center" HorizontalOptions="Center" Spacing="4">
+                    <Label Text="Your saved recipes will show up here." Style="{StaticResource ItemTitle}"
+                           HorizontalOptions="Center" />
+                </VerticalStackLayout>
+            </CollectionView.EmptyView>
+            
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="models:Recipe">
 

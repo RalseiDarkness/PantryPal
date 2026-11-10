@@ -16,9 +16,45 @@
         <!-- Tabs and page name -->
         <controls:TabHeader PageTitle="Find Recipes" />
 
-        <Label Grid.Row="1" Text="Recipes that match your pantry will show up here."
-               TextColor="{StaticResource PantryMutedText}"
-               HorizontalOptions="Center" VerticalOptions="Center" />
+        <CollectionView Grid.Row="1" 
+                        ItemsSource="{Binding Recipes}" 
+                        ItemsLayout="HorizontalList">
+            <CollectionView.EmptyView>
+                <VerticalStackLayout VerticalOptions="Center" HorizontalOptions="Center" Spacing="4">
+                    <Label Text="Recipes that match your pantry will show up here." Style="{StaticResource ItemTitle}"
+                           HorizontalOptions="Center" />
+                </VerticalStackLayout>
+            </CollectionView.EmptyView>
+
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="models:Recipe">
+
+                    <Border
+                        Padding="15"
+                        Margin="15"
+                        WidthRequest="250"
+                        HeightRequest="250"
+                        HorizontalOptions="Start"
+                        VerticalOptions="Start"
+                        Stroke="LightGray"
+                        StrokeThickness="1">
+
+                        <VerticalStackLayout>
+                            <Label
+                                Text="{Binding Name}"
+                                FontSize="18"
+                                FontAttributes="Bold" />
+
+                            <Label
+                                Text="{Binding Description}"
+                                FontSize="14" />
+                        </VerticalStackLayout>
+
+                    </Border>
+
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
     </Grid>
 
 </ContentPage>
