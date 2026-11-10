@@ -2,9 +2,14 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:controls="clr-namespace:PantryPal.Controls"
+             xmlns:models ="clr-namespace:PantryPal.Models"
              x:Class="PantryPal.PageViews.RecipesView"
              Title="Find Recipes"
-             BackgroundColor="{StaticResource PantryBackground}">
+             BackgroundColor="{StaticResource PantryBackground}"
+             x:DataType="models:FindRecipes">
+    <ContentPage.BindingContext>
+        <models:FindRecipes />
+    </ContentPage.BindingContext>
 
     <Grid RowDefinitions="Auto,*">
 

@@ -2,9 +2,14 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:controls="clr-namespace:PantryPal.Controls"
+             xmlns:models ="clr-namespace:PantryPal.Models"
              x:Class="PantryPal.PageViews.FavoritesView"
              Title="Favorites"
-             BackgroundColor="{StaticResource PantryBackground}">
+             BackgroundColor="{StaticResource PantryBackground}"
+             x:DataType="models:Favorites">
+    <ContentPage.BindingContext>
+        <models:Favorites />
+    </ContentPage.BindingContext>
 
     <Grid RowDefinitions="Auto,*">
 
@@ -14,6 +19,39 @@
         <Label Grid.Row="1" Text="Your saved recipes will show up here."
                TextColor="{StaticResource PantryMutedText}"
                HorizontalOptions="Center" VerticalOptions="Center" />
+
+        <CollectionView Grid.Row="1" 
+                        ItemsSource="{Binding RecipesFavorites}" 
+                        ItemsLayout="HorizontalList">
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="models:Recipe">
+
+                    <Border
+                        Padding="15"
+                        Margin="15"
+                        WidthRequest="250"
+                        HeightRequest="250"
+                        HorizontalOptions="Start"
+                        VerticalOptions="Start"
+                        Stroke="LightGray"
+                        StrokeThickness="1">
+
+                        <VerticalStackLayout>
+                            <Label
+                                Text="{Binding Name}"
+                                FontSize="18"
+                                FontAttributes="Bold" />
+
+                            <Label
+                                Text="{Binding Description}"
+                                FontSize="14" />
+                        </VerticalStackLayout>
+
+                    </Border>
+
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
     </Grid>
 
 </ContentPage>
