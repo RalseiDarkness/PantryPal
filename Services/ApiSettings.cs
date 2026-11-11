@@ -8,7 +8,8 @@ public static class ApiSettings
 #if DEBUG
     private const string MacCatalystDevelopmentBaseAddress = "http://localhost:5222/";
     private const string AndroidEmulatorDevelopmentBaseAddress = "http://10.0.2.2:5222/";
-    private const string WindowsDevelopmentBaseAddress = "http://localhost:5222/";
+    private const string WindowsDevelopmentBaseAddress =
+    "https://pantrypal-api-frgrbrbjcccbh3gn.westus-01.azurewebsites.net/";
 #else
     private const string DeployedApiBaseAddress =
         "https://pantrypal-api-frgrbrbjcccbh3gn.westus-01.azurewebsites.net/";

@@ -270,30 +270,17 @@ partial void OnIngredientQueryChanged(string value)
 
         try
         {
-            var response = await _recipeApiService.GetRecommendationsAsync(
+            var recipes = await _recipeApiService.SearchByIngredientIdsAsync(
                 IngredientSuggestion.GetDistinctIngredientIds(SelectedIngredients));
 
-            foreach (var recipe in response.Recipes)
+            foreach (var recipe in recipes)
             {
                 Recipes.Add(recipe);
             }
 
-            AiStatusMessage = response.AiError;
-            if (response.Recipes.Count == 0)
+            if (recipes.Count == 0)
             {
                 EmptyMessage = "No recipes matched the selected ingredients.";
-            }
-            else if (response.AiAvailable &&
-                     response.BestRecipeId is int bestRecipeId &&
-                     !string.IsNullOrWhiteSpace(response.Recommendation))
-            {
-                var bestRecipe = response.Recipes.FirstOrDefault(
-                    recipe => recipe.RecipeID == bestRecipeId);
-                if (bestRecipe is not null)
-                {
-                    RecommendationMessage =
-                        $"Top recommendation: {bestRecipe.Title}. {response.Recommendation}";
-                }
             }
         }
         catch (Exception ex) when (
@@ -304,7 +291,7 @@ partial void OnIngredientQueryChanged(string value)
                 TaskCanceledException or
                 InvalidOperationException)
         {
-            _logger.LogError(ex, "Recipe recommendations failed.");
+            _logger.LogError(ex, "Database recipe search failed.");
             ErrorMessage = $"Could not find recipes: {ex.Message}";
         }
         finally

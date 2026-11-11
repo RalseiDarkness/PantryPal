@@ -17,7 +17,7 @@
                 TextColor="#30271F" />
 
             <Label
-                Text="Choose ingredients to find matching recipes and AI-powered recommendations."
+                Text="Choose ingredients to find matching database recipes."
                 FontSize="14"
                 TextColor="#665A50" />
 
@@ -123,7 +123,7 @@
                 IsVisible="{Binding IsBusy}">
                 <ActivityIndicator IsRunning="{Binding IsBusy}" Color="#C85A18" />
                 <Label
-                    Text="Searching Azure SQL and analyzing recommendations..."
+                    Text="Searching Azure SQL for matching recipes..."
                     VerticalOptions="Center"
                     TextColor="#665A50" />
             </HorizontalStackLayout>
@@ -183,7 +183,7 @@
                         <VerticalStackLayout Spacing="8">
                             <Image
                                 Source="{Binding ImageURL}"
-                                HeightRequest="180"
+                                HeightRequest="300"
                                 Aspect="AspectFill"
                                 IsVisible="{Binding HasImage}" />
 
