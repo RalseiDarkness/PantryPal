@@ -32,8 +32,8 @@
             <HorizontalStackLayout
                 Spacing="8"
                 IsVisible="{Binding IsSearchingIngredients}">
-                <ActivityIndicator IsRunning="{Binding IsSearchingIngredients}" />
-                <Label Text="Searching database ingredients..." VerticalOptions="Center" />
+                <ActivityIndicator IsRunning="{Binding IsSearchingIngredients}" Color="#C85A18" />
+                <Label Text="Searching database ingredients..." VerticalOptions="Center" TextColor="#665A50" />
             </HorizontalStackLayout>
 
             <CollectionView
@@ -255,7 +255,10 @@
                                 Spacing="2">
                                 <BindableLayout.ItemTemplate>
                                     <DataTemplate x:DataType="x:String">
-                                        <Label Text="{Binding ., StringFormat='• {0}'}" FontSize="13" />
+                                        <Label
+                                            Text="{Binding ., StringFormat='• {0}'}"
+                                            FontSize="13"
+                                            TextColor="#665A50" />
                                     </DataTemplate>
                                 </BindableLayout.ItemTemplate>
                             </VerticalStackLayout>
@@ -280,7 +283,13 @@
                             <Button
                                 Text="{Binding InstructionsButtonText}"
                                 Clicked="OnToggleInstructionsClicked"
-                                HorizontalOptions="Start" />
+                                HorizontalOptions="Start"
+                                BackgroundColor="#C85A18"
+                                TextColor="White"
+                                BorderColor="#C85A18"
+                                BorderWidth="1"
+                                CornerRadius="8"
+                                Padding="16,10" />
 
                             <Label
                                 Text="{Binding Instructions}"
@@ -292,7 +301,13 @@
                                 Text="Open original recipe"
                                 Clicked="OnOpenSourceClicked"
                                 IsVisible="{Binding HasSourceUrl}"
-                                HorizontalOptions="Start" />
+                                HorizontalOptions="Start"
+                                BackgroundColor="#C85A18"
+                                TextColor="White"
+                                BorderColor="#C85A18"
+                                BorderWidth="1"
+                                CornerRadius="8"
+                                Padding="16,10" />
                         </VerticalStackLayout>
                     </Border>
                 </DataTemplate>
