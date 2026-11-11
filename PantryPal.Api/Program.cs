@@ -6,9 +6,10 @@ using PantryPal.Api.Models;
 using PantryPal.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
-// Local development: use the Azure CLI account verified with
-// `az account get-access-token --resource https://database.windows.net/`.
-builder.Services.AddSingleton<TokenCredential>(_ => new AzureCliCredential());
+builder.Services.AddSingleton<TokenCredential>(_ =>
+    builder.Environment.IsDevelopment()
+        ? new AzureCliCredential()
+        : new ManagedIdentityCredential(new ManagedIdentityCredentialOptions()));
 builder.Services.AddSingleton<SqlConnectionFactory>();
 builder.Services.AddScoped<RecipeService>();
 builder.Services.AddScoped<RecipeRecommendationService>();
