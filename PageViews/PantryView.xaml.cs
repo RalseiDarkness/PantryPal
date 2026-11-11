@@ -1,45 +1,106 @@
 using PantryPal.Models;
 using PantryPal.Services;
 using System.Collections.ObjectModel;
-using System.Globalization;
 
 namespace PantryPal.PageViews;
 
 public partial class PantryView : ContentPage
 {
-    private readonly PantryService _service = new(); //creates a new PantryService
+    // saves and loads pantry.json on this device
+    private readonly PantryService pantry_service = new();
+
+    // asks api for ingredient names from the database
+    private readonly RecipeApiService _api = new();
+
+    // the items on screen
     private readonly ObservableCollection<PantryItem> _items;
 
-    public PantryView() //constructor
+    // goes up by 1 every time the search box changes
+    // a search only shows its results if no newer search started while it was waiting
+    private int _searchNumber = 0;
+
+    // constructor, runs once when first opened
+    public PantryView()
     {
         InitializeComponent();
-        _items = new ObservableCollection<PantryItem>(_service.Load()); //loads the saved items
-        PantryList.ItemsSource = _items; // connect the list to the screen
-        DateEntry.Date = DateTime.Today; //set default date to today
+        _items = new ObservableCollection<PantryItem>(pantry_service.Load()); // loads the saved items
+        PantryList.ItemsSource = _items; // connects the list to the screen list
+        DateEntry.Date = DateTime.Today; // default date is today
     }
 
-    private void OnIngredientTextChanged(object? sender, TextChangedEventArgs e) //runs on any change in the search box
+    // runs on every change in the search box, asks the database for matching names
+    // async void is okay because it is an event handler
+    private async void OnIngredientTextChanged(object? sender, TextChangedEventArgs e)
     {
-        ErrorLabel.IsVisible = false; //hides error
+        ErrorLabel.IsVisible = false;
 
-        List<string> matches = _service.SearchIngredients(e.NewTextValue); //gets matches from the pantry service (temporary)
-        BindableLayout.SetItemsSource(SuggestionList, matches); //gives the matching ingredient names to suggestion list. BindableLayout diplays each one
-        SuggestionPanel.IsVisible = matches.Count > 0; //only shows if there is at least one match
+        // this search gets the next number
+        _searchNumber++;
+        int mySearch = _searchNumber;
+
+        // wait for 2 letters
+        string text = ReadBox(IngredientEntry);
+        if (text.Length < 2)
+        {
+            ShowSuggestions(new List<string>());
+            return;
+        }
+
+        // waits until typing pauses, otherwise every letter would be its own search
+        await Task.Delay(300);
+
+        if (mySearch != _searchNumber) return; // the user kept typing, a newer search takes over
+
+        try
+        {
+            List<string> names = await _api.SearchIngredientsAsync(text);
+            if (mySearch != _searchNumber) return; // the user typed more while this one was loading
+
+            // leaves out what is already typed and what is already in the pantry, then keeps 5
+            var suggestions = new List<string>();
+            foreach (string name in names)
+            {
+                if (suggestions.Count < 5 && name.ToLower() != text.ToLower() && !IsInPantry(name))
+                {
+                    suggestions.Add(name);
+                }
+            }
+            ShowSuggestions(suggestions);
+        }
+        catch (Exception)
+        {
+            // no internet, the api is down, or it took too long
+            ShowSuggestions(new List<string>());
+            ShowError("Couldn't load suggestions, check your internet.");
+        }
+    }
+
+    // puts the names in the suggestion box, hides the box when there are none
+    private void ShowSuggestions(List<string> names)
+    {
+        BindableLayout.SetItemsSource(SuggestionList, names); // BindableLayout makes one label per name
+        SuggestionPanel.IsVisible = names.Count > 0;
     }
 
     private void OnSuggestionTapped(object? sender, TappedEventArgs e)
     {
-        // takes the suggested ingredient name and puts it into IngredientEntry
-        IngredientEntry.Text = ((Label)sender!).Text;
-        BrandEntry.Focus(); //moves the users cursor the the brand entry field
+        // sender is the label that was tapped, the ! tells c# it is never null here
+        var label = (Label)sender!;
+
+        // puts the tapped name in the search box
+        IngredientEntry.Text = label.Text;
+
+        // setting Text started a new search, bumping the number makes it skip its results
+        _searchNumber++;
+        ShowSuggestions(new List<string>());
+
+        BrandEntry.Focus(); // moves the cursor to the brand box
     }
 
     private void OnAddClicked(object? sender, EventArgs e)
     {
-        // grabs the text entered into the ingredient name field
-        // ?.Trim() removes spaces from the beginning and end if Text is not null
-        // ?? "" uses an empty string if the entry is null
-        string name = IngredientEntry.Text?.Trim() ?? "";
+        // the typed name
+        string name = ReadBox(IngredientEntry);
 
         if (name.Length == 0)
         {
@@ -47,9 +108,9 @@ public partial class PantryView : ContentPage
             return;
         }
 
-        if (_items.Any(item => item.Name.Equals(name, StringComparison.OrdinalIgnoreCase))) //ordinalingorecase ignores capitalization
+        if (IsInPantry(name))
         {
-            ShowError($"{name} is already in your pantry.");
+            ShowError(name + " is already in your pantry.");
             return;
         }
 
@@ -59,18 +120,19 @@ public partial class PantryView : ContentPage
             return;
         }
 
-        //creates a new PantryItem object and adds it to the collection
+        // makes the new item and adds it to the list on screen
+        // ?? DateTime.Today means use today if no date was picked
         _items.Add(new PantryItem
         {
             Name = name,
-            Brand = BrandEntry.Text?.Trim(),
+            Brand = ReadBox(BrandEntry),
             Price = price,
             Date = DateEntry.Date ?? DateTime.Today
         });
 
         if (!TrySave()) return;
 
-        //resets textboxes
+        // clears the boxes for the next item
         IngredientEntry.Text = "";
         BrandEntry.Text = "";
         PriceEntry.Text = "";
@@ -80,40 +142,66 @@ public partial class PantryView : ContentPage
 
     private void OnRemoveClicked(object? sender, EventArgs e)
     {
-        var button = (Button)sender!; //convers sender into button object. Sender is the remove button that the user clicked
+        // sender is the X button that was clicked, its BindingContext is the item on that row
+        var button = (Button)sender!;
         var item = (PantryItem)button.BindingContext;
         _items.Remove(item);
         TrySave();
     }
 
-    // The price is optional so a blank box counts as 0.
+    // true if the pantry already has this name
+    // ToLower makes both lowercase so capitals don't matter
+    private bool IsInPantry(string name)
+    {
+        foreach (PantryItem item in _items)
+        {
+            if (item.Name.ToLower() == name.ToLower()) return true;
+        }
+        return false;
+    }
+
+    // reads the price box, gives false if it isn't a real price
+    // out means this method hands the price back through the price variable
     private bool TryReadPrice(out double price)
     {
         price = 0;
-        string text = PriceEntry.Text?.Trim().TrimStart('$') ?? ""; //removes $ and empty space
-        if (text.Length == 0) return true; //checks if the price is blank
+        string text = ReadBox(PriceEntry).Replace("$", ""); // removes the $
 
-        //safely attempts to conmver the text into a double
-        return double.TryParse(text, NumberStyles.Number, CultureInfo.CurrentCulture, out price)
-            && double.IsFinite(price) //checks that price isnt NaN
-            && price >= 0; //negative prices arent allowed
+        // the price is optional so a blank box counts as 0
+        if (text == "") return true;
+
+        // TryParse gives false instead of crashing when the text isn't a number
+        if (!double.TryParse(text, out price)) return false;
+
+        // no negative prices
+        return price >= 0;
     }
 
+    // saves the list, shows an error instead of crashing if the file can't be written
     private bool TrySave()
     {
         try
         {
-            _service.Save(_items);
+            pantry_service.Save(_items);
             ErrorLabel.IsVisible = false;
             return true;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception)
         {
             ShowError("Your pantry couldn't be saved. Please try again.");
             return false;
         }
     }
 
+    // gets the text from a box without spaces at the ends
+    // a box nobody has typed in has null instead of text, calling Trim on null crashes, so give back "" instead
+    private string ReadBox(Entry box)
+    {
+        if (box.Text == null) return "";
+        return box.Text.Trim();
+    }
+
+    // shows a red message under the add box
     private void ShowError(string message)
     {
         ErrorLabel.Text = message;

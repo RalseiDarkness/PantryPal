@@ -1,67 +1,99 @@
-using System.Text.Json.Serialization;
-using CommunityToolkit.Mvvm.ComponentModel;
+using System.Net;
 
 namespace PantryPal.Models;
 
-public partial class RecipeSearchResult : ObservableObject
+// one recipe sent back by the api
+// the property names match the api's json, capitals don't matter when it's read
+public class RecipeSearchResult
 {
-    [JsonPropertyName("recipeID")]
-    public int RecipeID { get; set; }
+    public string Title { get; set; } = "";
+    public string ImageURL { get; set; } = "";
+    public int ReadyInMinutes { get; set; }
+    public int Servings { get; set; }
 
-    [JsonPropertyName("title")]
-    public string Title { get; set; } = string.Empty;
+    // link to the website the recipe came from
+    public string SourceUrl { get; set; } = "";
 
-    [JsonPropertyName("imageURL")]
-    public string? ImageURL { get; set; }
+    // the steps, the database stores them as html like <ol><li>step</li></ol>
+    public string Instructions { get; set; } = "";
 
-    [JsonPropertyName("readyInMinutes")]
-    public int? ReadyInMinutes { get; set; }
+    // pantry ingredients this recipe uses
+    public List<string> MatchingIngredients { get; set; } = new List<string>();
 
-    [JsonPropertyName("servings")]
-    public int? Servings { get; set; }
+    // ingredients the recipe needs that are not in the pantry
+    public List<string> MissingIngredients { get; set; } = new List<string>();
 
-    [JsonPropertyName("sourceUrl")]
-    public string? SourceUrl { get; set; }
+    // everything below is made from the data above for the pages to show
+    // they only have get, so the json reader skips them
 
-    [JsonPropertyName("instructions")]
-    public string? Instructions { get; set; }
+    // short line under the title, like 45 min, serves 4
+    public string Summary
+    {
+        get { return ReadyInMinutes + " min, serves " + Servings; }
+    }
 
-    [JsonPropertyName("dateAdded")]
-    public DateTime DateAdded { get; set; }
+    // how well it fits the pantry, shown on the recipe card
+    public string MatchText
+    {
+        get { return "Uses " + MatchingIngredients.Count + " of your ingredients, needs " + MissingIngredients.Count + " more"; }
+    }
 
-    [JsonPropertyName("matchingIngredientCount")]
-    public int MatchingIngredientCount { get; set; }
+    // the ingredient lists as one line each, Join puts ", " between the names
+    public string HaveText
+    {
+        get { return string.Join(", ", MatchingIngredients); }
+    }
 
-    [JsonPropertyName("missingIngredientCount")]
-    public int MissingIngredientCount { get; set; }
+    public string NeedText
+    {
+        get { return string.Join(", ", MissingIngredients); }
+    }
 
-    public decimal MatchPercentage { get; set; }
+    // true when there is a photo or link, IsVisible in the xaml uses these
+    // IsNullOrEmpty also catches when the database sent nothing at all
+    public bool HasImage
+    {
+        get { return !string.IsNullOrEmpty(ImageURL); }
+    }
 
-    [JsonPropertyName("matchingIngredients")]
-    public List<string> MatchingIngredients { get; set; } = [];
+    public bool HasSource
+    {
+        get { return !string.IsNullOrEmpty(SourceUrl); }
+    }
 
-    [JsonPropertyName("missingIngredients")]
-    public List<string> MissingIngredients { get; set; } = [];
+    // turns the html steps into numbered plain text, one string per step
+    public List<string> Steps
+    {
+        get
+        {
+            var steps = new List<string>();
+            if (string.IsNullOrEmpty(Instructions)) return steps;
 
-    public string? Overview { get; set; }
+            // a step ends at </li> or </p>, so swap those for a new line
+            string html = Instructions.Replace("</li>", "\n").Replace("</p>", "\n");
 
-    public string? WhyItMatches { get; set; }
+            // copies every letter except the ones inside < >, which removes the html tags
+            string text = "";
+            bool insideTag = false;
+            foreach (char letter in html)
+            {
+                if (letter == '<') insideTag = true;
+                else if (letter == '>') insideTag = false;
+                else if (!insideTag) text += letter;
+            }
 
-    public string? MatchAssessment { get; set; }
+            // turns codes like &amp; back into normal symbols like &
+            text = WebUtility.HtmlDecode(text);
 
-    public List<string> Substitutions { get; set; } = [];
-
-    [JsonIgnore]
-    public bool HasImage => !string.IsNullOrWhiteSpace(ImageURL);
-
-    [JsonIgnore]
-    public bool HasSourceUrl => !string.IsNullOrWhiteSpace(SourceUrl);
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(InstructionsButtonText))]
-    private bool isInstructionsVisible;
-
-    [JsonIgnore]
-    public string InstructionsButtonText =>
-        IsInstructionsVisible ? "Hide full instructions" : "View full instructions";
+            // one numbered step per line, skipping blank lines
+            foreach (string line in text.Split('\n'))
+            {
+                if (line.Trim() != "")
+                {
+                    steps.Add((steps.Count + 1) + ". " + line.Trim());
+                }
+            }
+            return steps;
+        }
+    }
 }

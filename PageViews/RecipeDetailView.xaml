@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- one recipe, opened by tapping a card on the recipes page -->
+<!-- x:DataType on the page means every {Binding} here reads from a RecipeSearchResult -->
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:models="clr-namespace:PantryPal.Models"
+             x:Class="PantryPal.PageViews.RecipeDetailView"
+             x:DataType="models:RecipeSearchResult"
+             BackgroundColor="{StaticResource PantryBackground}">
+
+    <!-- row 0 back button, row 1 the recipe, which scrolls -->
+    <Grid RowDefinitions="Auto,*" RowSpacing="12" Padding="24,16,24,0" MaximumWidthRequest="680">
+
+        <!-- the shell's own back arrow is hidden, so this page has its own -->
+        <Button Text="Back to recipes" Clicked="OnBackClicked" HorizontalOptions="Start"
+                BackgroundColor="{StaticResource PantryCard}" TextColor="{StaticResource PantryText}"
+                FontFamily="OpenSansSemibold" CornerRadius="12" Padding="16,8" />
+
+        <!-- ScrollView lets a long recipe scroll instead of getting cut off -->
+        <ScrollView Grid.Row="1">
+            <VerticalStackLayout Spacing="8" Padding="0,0,0,24">
+
+                <!-- the Border rounds the photo corners, hidden when there is no photo -->
+                <Border IsVisible="{Binding HasImage}" StrokeThickness="0"
+                        StrokeShape="RoundRectangle 22" HeightRequest="260">
+                    <Image Source="{Binding ImageURL}" Aspect="AspectFill" />
+                </Border>
+
+                <Label Text="{Binding Title}" Style="{StaticResource ItemTitle}"
+                       FontSize="24" LineBreakMode="WordWrap" />
+                <Label Text="{Binding Summary}" Style="{StaticResource ItemDetail}" />
+
+                <!-- ingredients from the pantry and the ones still needed -->
+                <Label Text="You have" Style="{StaticResource SectionTitle}" />
+                <Label Text="{Binding HaveText}" Style="{StaticResource BodyText}" />
+
+                <Label Text="You still need" Style="{StaticResource SectionTitle}" />
+                <Label Text="{Binding NeedText}" Style="{StaticResource BodyText}" />
+
+                <!-- one label per step, Steps is already numbered -->
+                <Label Text="Steps" Style="{StaticResource SectionTitle}" />
+                <VerticalStackLayout BindableLayout.ItemsSource="{Binding Steps}" Spacing="6">
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="x:String">
+                            <Label Text="{Binding .}" Style="{StaticResource BodyText}" />
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+
+                    <!-- shown when the recipe has no steps saved -->
+                    <BindableLayout.EmptyView>
+                        <Label Text="No steps saved for this one, open the original recipe instead."
+                               Style="{StaticResource BodyText}" />
+                    </BindableLayout.EmptyView>
+                </VerticalStackLayout>
+
+                <!-- opens the website the recipe came from -->
+                <Button Text="Open original recipe" Style="{StaticResource WideButton}"
+                        IsVisible="{Binding HasSource}" Clicked="OnOpenSourceClicked" Margin="0,8,0,0" />
+
+            </VerticalStackLayout>
+        </ScrollView>
+    </Grid>
+
+</ContentPage>

@@ -1,19 +1,87 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:models="clr-namespace:PantryPal.Models"
              xmlns:controls="clr-namespace:PantryPal.Controls"
              x:Class="PantryPal.PageViews.RecipesView"
              Title="Find Recipes"
              BackgroundColor="{StaticResource PantryBackground}">
 
-    <Grid RowDefinitions="Auto,*">
+    <!-- same layout as the pantry page, row 0 header, row 1 list, row 2 controls at the bottom -->
+    <Grid RowDefinitions="Auto,*,Auto" RowSpacing="16" Padding="24,0,24,20" MaximumWidthRequest="680">
 
-        <!-- Tabs and page name -->
+        <!-- tabs and page name -->
         <controls:TabHeader PageTitle="Find Recipes" />
 
-        <Label Grid.Row="1" Text="Recipes that match your pantry will show up here."
-               TextColor="{StaticResource PantryMutedText}"
-               HorizontalOptions="Center" VerticalOptions="Center" />
+        <!-- recipe results, the code behind fills ItemsSource after a search -->
+        <CollectionView Grid.Row="1" x:Name="RecipeList" SelectionMode="None">
+
+            <!-- shown before the first search or when nothing matched -->
+            <CollectionView.EmptyView>
+                <VerticalStackLayout VerticalOptions="Center" HorizontalOptions="Center" Spacing="4">
+                    <Label Text="No recipes yet" Style="{StaticResource ItemTitle}"
+                           HorizontalOptions="Center" />
+                    <Label Text="Tap Find recipes to search with your pantry." Style="{StaticResource ItemDetail}"
+                           HorizontalOptions="Center" />
+                </VerticalStackLayout>
+            </CollectionView.EmptyView>
+
+            <CollectionView.ItemTemplate>
+
+                <!-- x:DataType checks every {Binding} name against RecipeSearchResult -->
+                <DataTemplate x:DataType="models:RecipeSearchResult">
+
+                    <!-- Padding adds the gap under each card -->
+                    <Grid Padding="0,0,0,12">
+
+                        <!-- same card look as a pantry item, tapping it opens the recipe page -->
+                        <Border BackgroundColor="{StaticResource PantryCard}" StrokeThickness="0"
+                                StrokeShape="RoundRectangle 22">
+                            <Border.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnRecipeTapped" />
+                            </Border.GestureRecognizers>
+
+                            <Grid ColumnDefinitions="96,*" HeightRequest="96" ColumnSpacing="14">
+
+                                <!-- orange square shows if there is no photo, the photo covers it when there is one -->
+                                <BoxView Color="{StaticResource PantryOrange}" />
+                                <Image Source="{Binding ImageURL}" Aspect="AspectFill"
+                                       IsVisible="{Binding HasImage}" />
+
+                                <!-- title, time and how well it matches the pantry -->
+                                <VerticalStackLayout Grid.Column="1" VerticalOptions="Center"
+                                                     Spacing="2" Padding="0,0,16,0">
+                                    <Label Text="{Binding Title}" Style="{StaticResource ItemTitle}" />
+                                    <Label Text="{Binding Summary}" Style="{StaticResource ItemDetail}" />
+                                    <Label Text="{Binding MatchText}" Style="{StaticResource ItemDetail}" />
+                                </VerticalStackLayout>
+                            </Grid>
+
+                        </Border>
+                    </Grid>
+
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+
+        </CollectionView>
+
+        <!-- what will be searched, the button, and a status message -->
+        <VerticalStackLayout Grid.Row="2" Spacing="8">
+
+            <!-- lists the saved pantry ingredients, filled in OnAppearing -->
+            <Label x:Name="IngredientsLabel" Style="{StaticResource ItemDetail}"
+                   LineBreakMode="WordWrap" MaxLines="2" HorizontalOptions="Center"
+                   HorizontalTextAlignment="Center" />
+
+            <Button x:Name="FindButton" Text="Find recipes" Style="{StaticResource WideButton}"
+                    Clicked="OnFindClicked" />
+
+            <!-- says how many recipes were found or what went wrong, empty at first -->
+            <Label x:Name="StatusLabel" Style="{StaticResource ItemDetail}"
+                   LineBreakMode="WordWrap" HorizontalOptions="Center"
+                   HorizontalTextAlignment="Center" />
+        </VerticalStackLayout>
+
     </Grid>
 
 </ContentPage>

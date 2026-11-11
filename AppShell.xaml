@@ -19,8 +19,7 @@
         </Tab>
         
         <Tab Route="recipes" Title="Find Recipes">
-            <!-- Grant's FindRecipes page needs its view model, so AppShell.xaml.cs fills this in -->
-            <ShellContent x:Name="RecipeSearchContent" />
+            <ShellContent ContentTemplate="{DataTemplate views:RecipesView}" />
         </Tab>
         
         <Tab x:Name="PantryTab" Route="pantry" Title="My Pantry">

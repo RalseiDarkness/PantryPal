@@ -1,154 +1,67 @@
 using System.Net.Http.Json;
-using System.Text.Json;
 using PantryPal.Models;
 
 namespace PantryPal.Services;
 
+// talks to the PantryPal.Api website, the api is what reads the azure database
+// the app never connects to the database itself, so no passwords or keys live in the app
 public class RecipeApiService
 {
-    private static readonly JsonSerializerOptions JsonOptions =
-        new(JsonSerializerDefaults.Web);
+    // the address of the api on the internet
+    // to test a local copy of the api, run it and use http://localhost:5222/ here instead
+    private const string ApiAddress = "https://pantrypal-api-frgrbrbjcccbh3gn.westus-01.azurewebsites.net/";
 
-    private readonly HttpClient _httpClient;
-    private readonly ApiProcessManager _apiProcessManager;
+    // HttpClient sends web requests, one is shared by the whole app
+    // the timeout is long because the database can take about 45 seconds to wake up
+    private static readonly HttpClient Client = new HttpClient { Timeout = TimeSpan.FromSeconds(90) };
 
-    public RecipeApiService(
-        HttpClient httpClient,
-        ApiProcessManager apiProcessManager)
+    // asks the database for ingredient names that match what was typed
+    public async Task<List<string>> SearchIngredientsAsync(string text)
     {
-        _httpClient = httpClient;
-        _apiProcessManager = apiProcessManager;
-    }
+        // EscapeDataString makes spaces and symbols safe to put in a web address
+        string url = ApiAddress + "api/ingredients/search?query=" + Uri.EscapeDataString(text);
 
-    public Task<List<RecipeSearchResult>> SearchByIngredientNamesAsync(
-        IReadOnlyCollection<string> ingredientNames,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(ingredientNames);
-        if (ingredientNames.Count == 0)
+        // downloads the json and turns it into a list of IngredientResult objects
+        List<IngredientResult>? results = await Client.GetFromJsonAsync<List<IngredientResult>>(url);
+
+        // keeps just the names
+        var names = new List<string>();
+        if (results == null) return names;
+
+        foreach (IngredientResult result in results)
         {
-            throw new ArgumentException(
-                "At least one ingredient name is required.",
-                nameof(ingredientNames));
+            names.Add(result.IngredientName);
         }
-
-        return SearchAsync(
-            new RecipeSearchRequest { IngredientNames = ingredientNames },
-            cancellationToken);
+        return names;
     }
 
-    public Task<List<RecipeSearchResult>> SearchByIngredientIdsAsync(
-        IReadOnlyCollection<int> ingredientIds,
-        CancellationToken cancellationToken = default)
+    // finds recipes that use these ingredient names, the api puts the best matches first
+    public async Task<List<RecipeSearchResult>> FindRecipesAsync(List<string> ingredientNames)
     {
-        ArgumentNullException.ThrowIfNull(ingredientIds);
-        if (ingredientIds.Count == 0)
-        {
-            throw new ArgumentException(
-                "At least one ingredient ID is required.",
-                nameof(ingredientIds));
-        }
+        string url = ApiAddress + "api/recipes/search";
 
-        return SearchAsync(
-            new RecipeSearchRequest { IngredientIds = ingredientIds },
-            cancellationToken);
+        // PostAsJsonAsync turns the request into json like { "ingredientNames": ["eggs", "milk"] } and sends it
+        var request = new RecipeRequest { IngredientNames = ingredientNames };
+        HttpResponseMessage response = await Client.PostAsJsonAsync(url, request);
+
+        // stops here with an error if the api didn't send back recipes
+        response.EnsureSuccessStatusCode();
+
+        // turns the json reply into a list of RecipeSearchResult objects
+        List<RecipeSearchResult>? recipes = await response.Content.ReadFromJsonAsync<List<RecipeSearchResult>>();
+        if (recipes == null) return new List<RecipeSearchResult>();
+        return recipes;
     }
 
-    public async Task<List<IngredientSuggestion>> SearchIngredientsAsync(
-        string query,
-        CancellationToken cancellationToken = default)
+    // one ingredient from the search, the api also sends ids but only the name is needed
+    private class IngredientResult
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(query);
-        await _apiProcessManager.EnsureStartedAsync(cancellationToken);
-
-        var requestUri = new Uri(
-            ApiSettings.GetBaseAddress(),
-            $"api/ingredients/search?query={Uri.EscapeDataString(query.Trim())}");
-
-        using var response = await _httpClient.GetAsync(requestUri, cancellationToken);
-        await EnsureSuccessStatusCodeAsync(response, cancellationToken);
-
-        var suggestions = await response.Content.ReadFromJsonAsync<List<IngredientSuggestion>>(
-            JsonOptions,
-            cancellationToken);
-
-        return IngredientSuggestion.Consolidate(
-            suggestions ?? throw new JsonException(
-                "The ingredient search API returned an empty JSON response."));
+        public string IngredientName { get; set; } = "";
     }
 
-    public async Task<RecipeRecommendationResponse> GetRecommendationsAsync(
-        IReadOnlyCollection<int> ingredientIds,
-        CancellationToken cancellationToken = default)
+    // what gets sent to the api when searching for recipes
+    private class RecipeRequest
     {
-        ArgumentNullException.ThrowIfNull(ingredientIds);
-        if (ingredientIds.Count == 0)
-        {
-            throw new ArgumentException(
-                "At least one ingredient ID is required.",
-                nameof(ingredientIds));
-        }
-
-        await _apiProcessManager.EnsureStartedAsync(cancellationToken);
-        var requestUri = new Uri(
-            ApiSettings.GetBaseAddress(),
-            "api/recipes/recommendations");
-
-        using var response = await _httpClient.PostAsJsonAsync(
-            requestUri,
-            new RecipeRecommendationRequest { IngredientIds = ingredientIds },
-            JsonOptions,
-            cancellationToken);
-        await EnsureSuccessStatusCodeAsync(response, cancellationToken);
-
-        return await response.Content.ReadFromJsonAsync<RecipeRecommendationResponse>(
-                   JsonOptions,
-                   cancellationToken)
-               ?? throw new JsonException(
-                   "The recipe recommendations API returned an empty JSON response.");
-    }
-
-    private async Task<List<RecipeSearchResult>> SearchAsync(
-        RecipeSearchRequest request,
-        CancellationToken cancellationToken)
-    {
-        await _apiProcessManager.EnsureStartedAsync(cancellationToken);
-        var requestUri = new Uri(
-            ApiSettings.GetBaseAddress(),
-            "api/recipes/search");
-
-        using var response = await _httpClient.PostAsJsonAsync(
-            requestUri,
-            request,
-            JsonOptions,
-            cancellationToken);
-
-        await EnsureSuccessStatusCodeAsync(response, cancellationToken);
-
-        var recipes = await response.Content.ReadFromJsonAsync<List<RecipeSearchResult>>(
-            JsonOptions,
-            cancellationToken);
-
-        return recipes ?? throw new JsonException(
-            "The recipe search API returned an empty JSON response.");
-    }
-
-    private static async Task EnsureSuccessStatusCodeAsync(
-        HttpResponseMessage response,
-        CancellationToken cancellationToken)
-    {
-        if (!response.IsSuccessStatusCode)
-        {
-            var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
-            var detail = string.IsNullOrWhiteSpace(responseBody)
-                ? string.Empty
-                : $" {responseBody[..Math.Min(responseBody.Length, 500)]}";
-
-            throw new HttpRequestException(
-                $"PantryPal API request failed with HTTP {(int)response.StatusCode} " +
-                $"({response.StatusCode}).{detail}",
-                inner: null,
-                statusCode: response.StatusCode);
-        }
+        public List<string> IngredientNames { get; set; } = new List<string>();
     }
 }

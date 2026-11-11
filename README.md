@@ -1,19 +1,24 @@
 # PantryPal
 
-PantryPal's Find Recipes workflow uses the MAUI app, the PantryPal API, Azure SQL,
-and an Azure OpenAI-compatible GPT-4o deployment:
+## How the app uses the database
 
-1. The app searches `Ingredients` through `GET /api/ingredients/search`.
-2. The user selects database ingredient IDs.
-3. `POST /api/recipes/recommendations` resolves those IDs, finds matching recipes,
-   and calculates matching/missing ingredients and selected-ingredient coverage.
-4. The API sends only the top 10 matches and the selected ingredient names to
-   Azure AI Foundry. If AI analysis is unavailable, the SQL matches are still
-   returned with an explanatory status.
+The MAUI app never connects to Azure SQL itself. It calls the deployed PantryPal API
+(`Services/RecipeApiService.cs`), and the API reads the database.
 
-The existing `POST /api/recipes/search` endpoint and Favorites page remain in
-place. Pantry items continue to be stored locally as JSON; the database-backed
-recipe search uses the separately hosted API.
+1. **My Pantry** (`PageViews/PantryView`): typing 2+ letters calls
+   `GET /api/ingredients/search` for ingredient names. Picked items are saved on
+   the device in `pantry.json`.
+2. **Find Recipes** (`PageViews/RecipesView`): sends the saved pantry names to
+   `POST /api/recipes/search` and shows the best 20 matches.
+3. **Recipe page** (`PageViews/RecipeDetailView`): tapping a recipe shows what you
+   have, what you still need, the steps and a link to the original recipe.
+
+Every build of the app (Debug and Release) uses the deployed API, so it works for
+the whole team without Azure access. To test API changes locally, run the API and
+change `ApiAddress` in `RecipeApiService.cs` to `http://localhost:5222/`.
+
+The API also has `POST /api/recipes/recommendations`, which adds Azure AI
+suggestions. The app doesn't use it right now.
 
 ## Local Windows demo
 
@@ -42,8 +47,9 @@ MAUI app as separate processes.
    dotnet run --project .\PantryPal.Api\PantryPal.Api.csproj --launch-profile http
    ```
 
-   Its HTTP launch profile listens on port `5222`. The MAUI Windows Debug app
-   defaults to `http://localhost:5222/`.
+   Its HTTP launch profile listens on port `5222`. The app uses the deployed API
+   unless `ApiAddress` in `Services/RecipeApiService.cs` is changed to
+   `http://localhost:5222/`.
 4. In Visual Studio, set PantryPal as the startup project and run the Windows
    Machine target. On Windows, the app can also be built with:
 
@@ -51,9 +57,10 @@ MAUI app as separate processes.
    dotnet build .\PantryPal.csproj -f net10.0-windows10.0.19041.0
    ```
 
-5. Type at least two characters in Find Recipes, select one or more suggestions,
-   and choose **Find Recipes**. The API requests and an empty-selection check are
-   in [PantryPal.Api.http](./PantryPal.Api/PantryPal.Api.http).
+5. Add ingredients on **My Pantry** (type at least two letters to see database
+   suggestions), then open **Find Recipes** and choose **Find recipes**. Example API
+   requests are in [PantryPal.Api.http](./PantryPal.Api/PantryPal.Api.http).
+   Run `dotnet test PantryPal.Tests` for the app tests.
 
 The Azure SQL server and database are currently specified in
 `PantryPal.Api/Data/SqlConnectionFactory.cs`. The implementation relies on the

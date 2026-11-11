@@ -8,23 +8,10 @@
              BackgroundColor="{StaticResource PantryBackground}">
 
     <!-- styles here apply to this page only -->
+    <!-- ItemTitle and ItemDetail moved to Resources/Styles/PantryStyles.xaml so the recipe pages can use them too -->
     <ContentPage.Resources>
 
-        <Style x:Key="ItemTitle" TargetType="Label">
-            <Setter Property="TextColor" Value="{StaticResource PantryText}" />
-            <Setter Property="FontFamily" Value="OpenSansSemibold" />
-            <Setter Property="FontSize" Value="17" />
-            <Setter Property="VerticalOptions" Value="Center" />
-            <Setter Property="LineBreakMode" Value="TailTruncation" />
-        </Style>
-
-        <Style x:Key="ItemDetail" TargetType="Label">
-            <Setter Property="TextColor" Value="{StaticResource PantryMutedText}" />
-            <Setter Property="FontSize" Value="14" />
-            <Setter Property="VerticalOptions" Value="Center" />
-            <Setter Property="LineBreakMode" Value="TailTruncation" />
-        </Style>
-
+        <!-- rounded box -->
         <Style x:Key="FieldBox" TargetType="Border">
             <Setter Property="BackgroundColor" Value="{StaticResource PantryField}" />
             <Setter Property="Stroke" Value="{StaticResource PantryCard}" />
@@ -33,11 +20,13 @@
             <Setter Property="Padding" Value="8,0" />
         </Style>
 
+        <!-- text and placeholder colors for the text fields -->
         <Style x:Key="FieldEntry" TargetType="Entry">
             <Setter Property="TextColor" Value="{StaticResource PantryText}" />
             <Setter Property="PlaceholderColor" Value="{StaticResource PantryMutedText}" />
         </Style>
 
+        <!-- the square X and + buttons -->
         <Style x:Key="SquareButton" TargetType="Button">
             <Setter Property="WidthRequest" Value="48" />
             <Setter Property="HeightRequest" Value="48" />
@@ -49,13 +38,13 @@
 
     </ContentPage.Resources>
 
-    <!--Main UI-->
+    <!-- main ui, row 0 header, row 1 list fills the middle, row 2 add box at the bottom -->
     <Grid RowDefinitions="Auto,*,Auto" RowSpacing="16" Padding="24,0,24,20" MaximumWidthRequest="680">
 
-        <!-- Tabs and page name -->
+        <!-- tabs and page name -->
         <controls:TabHeader PageTitle="My Pantry" />
 
-        <!-- Pantry list -->
+        <!-- pantry list -->
         <CollectionView Grid.Row="1" x:Name="PantryList">
 
             <!-- shown whenever the list has no items -->
@@ -66,6 +55,7 @@
                     <Label Text="Add your first ingredient below." Style="{StaticResource ItemDetail}"
                            HorizontalOptions="Center" />
                 </VerticalStackLayout>
+                
             </CollectionView.EmptyView>
 
             <CollectionView.ItemTemplate>
@@ -117,10 +107,11 @@
 
         </CollectionView>
 
-        <!-- Add options-->
+        <!-- add options -->
         <Grid Grid.Row="2" ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto"
               ColumnSpacing="12" RowSpacing="8">
 
+            <!-- search box, typing here asks the database for matching ingredient names -->
             <Border Style="{StaticResource FieldBox}">
                 <Entry x:Name="IngredientEntry" Placeholder="Search for an ingredient"
                        Style="{StaticResource FieldEntry}"
@@ -168,6 +159,7 @@
                 </Border>
             </Grid>
 
+            <!-- red message, hidden until something goes wrong -->
             <Label x:Name="ErrorLabel" Grid.Row="3" Grid.ColumnSpan="2" IsVisible="False"
                    TextColor="{StaticResource PantryError}" HorizontalOptions="Center" />
         </Grid>

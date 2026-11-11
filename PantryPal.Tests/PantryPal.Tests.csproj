@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <!-- a plain .NET project, so tests run without starting the MAUI app -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -7,17 +8,19 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
 
+  <!-- borrows this file from the app, it doesn't use any MAUI code so it works here -->
   <ItemGroup>
-    <Compile Include="../Models/IngredientSuggestion.cs" Link="Models/IngredientSuggestion.cs" />
-    <Compile Include="../Services/AutocompleteSearchGeneration.cs" Link="Services/AutocompleteSearchGeneration.cs" />
+    <Compile Include="../Models/RecipeSearchResult.cs" Link="Models/RecipeSearchResult.cs" />
   </ItemGroup>
 
+  <!-- xunit is the test framework -->
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
   </ItemGroup>
 
+  <!-- lets every test file use [Fact] and Assert without a using line -->
   <ItemGroup>
     <Using Include="Xunit" />
   </ItemGroup>
