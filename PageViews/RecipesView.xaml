@@ -17,8 +17,8 @@
         <controls:TabHeader PageTitle="Find Recipes" />
 
         <CollectionView Grid.Row="1" 
-                        ItemsSource="{Binding Recipes}" 
-                        ItemsLayout="HorizontalList">
+                        ItemsSource="{Binding Recipes}"
+                        Margin="30">
             <CollectionView.EmptyView>
                 <VerticalStackLayout VerticalOptions="Center" HorizontalOptions="Center" Spacing="4">
                     <Label Text="Recipes that match your pantry will show up here." Style="{StaticResource ItemTitle}"
@@ -26,28 +26,37 @@
                 </VerticalStackLayout>
             </CollectionView.EmptyView>
 
+            <CollectionView.ItemsLayout>
+                <GridItemsLayout Orientation="Vertical" 
+                    Span="4"
+                    HorizontalItemSpacing="5"
+                    VerticalItemSpacing="5" />
+            </CollectionView.ItemsLayout>
+
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="models:Recipe">
 
                     <Border
-                        Padding="15"
-                        Margin="15"
                         WidthRequest="250"
                         HeightRequest="250"
                         HorizontalOptions="Start"
                         VerticalOptions="Start"
-                        Stroke="LightGray"
-                        StrokeThickness="1">
+                        StrokeThickness="0"
+                        BackgroundColor="white">
 
                         <VerticalStackLayout>
                             <Label
+                                Margin="10"
                                 Text="{Binding Name}"
                                 FontSize="18"
-                                FontAttributes="Bold" />
+                                FontAttributes="Bold"
+                                TextColor="black" />
 
                             <Label
+                                Margin="10"
                                 Text="{Binding Description}"
-                                FontSize="14" />
+                                FontSize="14"
+                                TextColor="black" />
                         </VerticalStackLayout>
 
                     </Border>
