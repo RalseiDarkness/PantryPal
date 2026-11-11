@@ -68,11 +68,13 @@ public class RecipeApiService
         using var response = await _httpClient.GetAsync(requestUri, cancellationToken);
         await EnsureSuccessStatusCodeAsync(response, cancellationToken);
 
-        return await response.Content.ReadFromJsonAsync<List<IngredientSuggestion>>(
-                   JsonOptions,
-                   cancellationToken)
-               ?? throw new JsonException(
-                   "The ingredient search API returned an empty JSON response.");
+        var suggestions = await response.Content.ReadFromJsonAsync<List<IngredientSuggestion>>(
+            JsonOptions,
+            cancellationToken);
+
+        return IngredientSuggestion.Consolidate(
+            suggestions ?? throw new JsonException(
+                "The ingredient search API returned an empty JSON response."));
     }
 
     public async Task<RecipeRecommendationResponse> GetRecommendationsAsync(

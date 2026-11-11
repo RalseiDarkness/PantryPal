@@ -14,8 +14,8 @@ public partial class RecipeSearchViewModel : ObservableObject
     private readonly RecipeApiService _recipeApiService;
     private readonly ILogger<RecipeSearchViewModel> _logger;
     private readonly object _suggestionSearchLock = new();
+    private readonly AutocompleteSearchGeneration _suggestionSearchGeneration = new();
     private CancellationTokenSource? _suggestionSearchCancellation;
-    private int _suggestionSearchVersion;
 
     public ObservableCollection<IngredientSuggestion> Suggestions { get; } = [];
 
@@ -107,42 +107,42 @@ public partial class RecipeSearchViewModel : ObservableObject
 
 partial void OnIngredientQueryChanged(string value)
 {
-    var version = Interlocked.Increment(ref _suggestionSearchVersion);
-    var query = value.Trim();
-    CancellationTokenSource? cancellation = null;
+        var version = _suggestionSearchGeneration.Begin();
+        var query = value.Trim();
+        CancellationTokenSource? cancellation = null;
 
-    lock (_suggestionSearchLock)
-    {
-        _suggestionSearchCancellation?.Cancel();
-
-        if (query.Length >= 2)
+        lock (_suggestionSearchLock)
         {
-            cancellation = new CancellationTokenSource();
-            _suggestionSearchCancellation = cancellation;
+            _suggestionSearchCancellation?.Cancel();
+
+            if (query.Length >= 2)
+            {
+                cancellation = new CancellationTokenSource();
+                _suggestionSearchCancellation = cancellation;
+            }
+            else
+            {
+                _suggestionSearchCancellation = null;
+            }
         }
-        else
+
+        Suggestions.Clear();
+        SuggestionErrorMessage = null;
+
+        if (query.Length < 2)
         {
-            _suggestionSearchCancellation = null;
+            IsSearchingIngredients = false;
+            return;
         }
+
+        IsSearchingIngredients = true;
+
+        _ = LoadSuggestionsAsync(
+            query,
+            cancellation!,
+            cancellation!.Token,
+            version);
     }
-
-    Suggestions.Clear();
-    SuggestionErrorMessage = null;
-
-    if (query.Length < 2)
-    {
-        IsSearchingIngredients = false;
-        return;
-    }
-
-    IsSearchingIngredients = true;
-
-    _ = LoadSuggestionsAsync(
-        query,
-        cancellation!,
-        cancellation!.Token,
-        version);
-}
 
 
     private async Task LoadSuggestionsAsync(
@@ -160,19 +160,18 @@ partial void OnIngredientQueryChanged(string value)
 
             await MainThread.InvokeOnMainThreadAsync(() =>
             {
-                if (version != Volatile.Read(ref _suggestionSearchVersion) ||
+                if (!_suggestionSearchGeneration.IsCurrent(version) ||
                     cancellationToken.IsCancellationRequested)
                 {
                     return;
                 }
 
-                var selectedNames = SelectedIngredients
-                    .Select(ingredient => ingredient.IngredientName)
-                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
                 Suggestions.Clear();
                 foreach (var suggestion in suggestions.Where(
-                             ingredient => !selectedNames.Contains(ingredient.IngredientName)))
+                             suggestion => !SelectedIngredients.Any(selected =>
+                                 IngredientSuggestion.HasSameNormalizedName(
+                                     selected.IngredientName,
+                                     suggestion.IngredientName))))
                 {
                     Suggestions.Add(suggestion);
                 }
@@ -188,7 +187,7 @@ partial void OnIngredientQueryChanged(string value)
         {
             await MainThread.InvokeOnMainThreadAsync(() =>
             {
-                if (version != Volatile.Read(ref _suggestionSearchVersion) ||
+                if (!_suggestionSearchGeneration.IsCurrent(version) ||
                     cancellationToken.IsCancellationRequested)
                 {
                     return;
@@ -201,51 +200,43 @@ partial void OnIngredientQueryChanged(string value)
         }
         finally
         {
-    bool wasActive;
+            bool wasActive;
 
-    lock (_suggestionSearchLock)
-    {
-        wasActive = ReferenceEquals(_suggestionSearchCancellation, cancellation);
-
-        if (wasActive)
-        {
-            _suggestionSearchCancellation = null;
-        }
-
-        cancellation.Dispose();
-    }
-
-    if (wasActive)
-    {
-        await MainThread.InvokeOnMainThreadAsync(() =>
-        {
-            if (version == Volatile.Read(ref _suggestionSearchVersion))
+            lock (_suggestionSearchLock)
             {
-                IsSearchingIngredients = false;
+                wasActive = ReferenceEquals(_suggestionSearchCancellation, cancellation);
+
+                if (wasActive)
+                {
+                    _suggestionSearchCancellation = null;
+                }
+
+                cancellation.Dispose();
             }
-        });
-    }
+
+            if (wasActive)
+            {
+                await MainThread.InvokeOnMainThreadAsync(() =>
+                {
+                    if (_suggestionSearchGeneration.IsCurrent(version))
+                    {
+                        IsSearchingIngredients = false;
+                    }
+                });
+            }
         }
     }
 
     public void SelectIngredient(IngredientSuggestion ingredient)
     {
-        if (ingredient.IngredientIDs is null || ingredient.IngredientIDs.Count == 0)
+        if (!IngredientSuggestion.TryAddOrMergeSelection(
+                SelectedIngredients,
+                ingredient))
         {
             ErrorMessage = "This ingredient suggestion has no database IDs. Please search again.";
             return;
         }
 
-        if (SelectedIngredients.Any(
-                selected => string.Equals(
-                    selected.IngredientName,
-                    ingredient.IngredientName,
-                    StringComparison.OrdinalIgnoreCase)))
-        {
-            return;
-        }
-
-        SelectedIngredients.Add(ingredient);
         IngredientQuery = string.Empty;
         SuggestionErrorMessage = null;
         ErrorMessage = null;
@@ -280,9 +271,7 @@ partial void OnIngredientQueryChanged(string value)
         try
         {
             var response = await _recipeApiService.GetRecommendationsAsync(
-                SelectedIngredients.SelectMany(ingredient => ingredient.IngredientIDs)
-                    .Distinct()
-                    .ToArray());
+                IngredientSuggestion.GetDistinctIngredientIds(SelectedIngredients));
 
             foreach (var recipe in response.Recipes)
             {

@@ -31,11 +31,15 @@ public class RecipeService
                     IngredientName COLLATE Latin1_General_100_BIN2 AS NameKey,
                     DATALENGTH(IngredientName) AS NameByteLength,
                     MIN(CASE
+                        WHEN IngredientName COLLATE Latin1_General_100_CI_AS =
+                                @ExactQuery COLLATE Latin1_General_100_CI_AS
+                            AND DATALENGTH(IngredientName) = DATALENGTH(@ExactQuery)
+                            THEN 0
                         WHEN IngredientName COLLATE Latin1_General_100_CI_AS
-                            LIKE @PrefixPattern ESCAPE '\' THEN 0
+                            LIKE @PrefixPattern ESCAPE '\' THEN 1
                         WHEN IngredientName COLLATE Latin1_General_100_CI_AS
-                            LIKE @WordPrefixPattern ESCAPE '\' THEN 1
-                        ELSE 2
+                            LIKE @WordPrefixPattern ESCAPE '\' THEN 2
+                        ELSE 3
                     END) AS MatchRank,
                     MIN(IngredientID) AS DisplayIngredientID
                 FROM Ingredients
@@ -84,6 +88,8 @@ public class RecipeService
             """;
 
         await using var command = new SqlCommand(sql, connection);
+        command.Parameters.Add("@ExactQuery", SqlDbType.NVarChar, 100)
+            .Value = query.Trim();
         command.Parameters.Add("@PrefixPattern", SqlDbType.NVarChar, 202)
             .Value = $"{escapedQuery}%";
         command.Parameters.Add("@WordPrefixPattern", SqlDbType.NVarChar, 214)
