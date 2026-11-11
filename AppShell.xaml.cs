@@ -1,12 +1,17 @@
-﻿namespace PantryPal;
+using PantryPal.Views;
+
+namespace PantryPal;
 
 public partial class AppShell : Shell
 {
-	public AppShell()
+	public AppShell(FindRecipes findRecipes)
 	{
 		InitializeComponent();
+		RecipeSearchContent.Content = findRecipes;
 
-        // the app opens on HomePage.
-        MainTabs.CurrentItem = HomePage;
-    }
+		Routing.RegisterRoute("Favorites", typeof(Views.Favorites));
+
+		// the app opens on HomePage.
+		MainTabs.CurrentItem = HomePage;
+	}
 }

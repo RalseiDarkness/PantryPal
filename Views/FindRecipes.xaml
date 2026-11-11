@@ -1,49 +1,318 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-             xmlns:models ="clr-namespace:PantryPal.Models"
+             xmlns:models="clr-namespace:PantryPal.Models"
+             xmlns:viewmodels="clr-namespace:PantryPal.ViewModels"
+             xmlns:controls="clr-namespace:PantryPal.Controls"
              x:Class="PantryPal.Views.FindRecipes"
-             x:DataType="models:FindRecipes">
-    <ContentPage.BindingContext>
-        <models:FindRecipes />
-    </ContentPage.BindingContext>
-    <Grid RowDefinitions="Auto,*">
-        <VerticalStackLayout Grid.Row="0" Padding="5" Margin="20">
+             x:DataType="viewmodels:RecipeSearchViewModel"
+             BackgroundColor="#FFF9F2">
+
+    <Grid Padding="20,0,20,20" RowDefinitions="Auto,Auto,Auto,Auto,*" RowSpacing="12">
+
+        <VerticalStackLayout Grid.Row="0" Spacing="8">
+            <controls:TabHeader PageTitle="Find Recipes" />
+
             <Label
-                Text="Results"
+                Text="Find a recipe"
                 FontSize="28"
-                FontAttributes="Bold"/>
+                FontAttributes="Bold"
+                TextColor="#30271F" />
+
+            <Label
+                Text="Choose ingredients to find matching database recipes."
+                FontSize="14"
+                TextColor="#665A50" />
+
+            <Entry
+                Placeholder="Type an ingredient (at least 2 characters)"
+                Text="{Binding IngredientQuery}"
+                ReturnType="Search"
+                ClearButtonVisibility="WhileEditing"
+                TextColor="#30271F"
+                PlaceholderColor="#665A50" />
+
+            <HorizontalStackLayout
+                Spacing="8"
+                IsVisible="{Binding IsSearchingIngredients}">
+                <ActivityIndicator IsRunning="{Binding IsSearchingIngredients}" Color="#C85A18" />
+                <Label Text="Searching database ingredients..." VerticalOptions="Center" TextColor="#665A50" />
+            </HorizontalStackLayout>
+
+            <CollectionView
+                ItemsSource="{Binding Suggestions}"
+                SelectionMode="Single"
+                SelectionChanged="OnSuggestionSelected"
+                HeightRequest="160"
+                IsVisible="{Binding HasSuggestions}">
+                <CollectionView.ItemTemplate>
+                    <DataTemplate x:DataType="models:IngredientSuggestion">
+                        <Border
+                            Padding="10,8"
+                            Margin="0,0,0,4"
+                            BackgroundColor="White"
+                            Stroke="#E5D9CC">
+                            <Label
+                                Text="{Binding IngredientName}"
+                                FontSize="15"
+                                TextColor="#30271F" />
+                        </Border>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+
+            <Label
+                Text="No new matching ingredients found."
+                TextColor="#665A50"
+                IsVisible="{Binding HasNoSuggestions}" />
+
+            <Label
+                Text="{Binding SuggestionErrorMessage}"
+                TextColor="#B42318"
+                IsVisible="{Binding HasSuggestionError}" />
+
+            <Label
+                Text="Selected ingredients"
+                FontAttributes="Bold"
+                TextColor="#30271F" />
+
+            <Label
+                Text="Add an ingredient above to enable recipe search."
+                FontSize="13"
+                TextColor="#665A50"
+                IsVisible="{Binding HasNoSelectedIngredients}" />
+
+            <CollectionView
+                ItemsSource="{Binding SelectedIngredients}"
+                ItemsLayout="HorizontalList"
+                HeightRequest="48">
+                <CollectionView.ItemTemplate>
+                    <DataTemplate x:DataType="models:IngredientSuggestion">
+                        <Border
+                            Padding="10,4"
+                            Margin="0,0,8,0"
+                            BackgroundColor="#FBE8D7"
+                            Stroke="#E9B98E">
+                            <HorizontalStackLayout Spacing="6">
+                                <Label
+                                    Text="{Binding IngredientName}"
+                                    VerticalOptions="Center"
+                                    TextColor="#30271F" />
+                                <Button
+                                    Text="×"
+                                    Padding="4,0"
+                                    MinimumWidthRequest="28"
+                                    MinimumHeightRequest="28"
+                                    BackgroundColor="Transparent"
+                                    TextColor="#7A3515"
+                                    Clicked="OnRemoveIngredientClicked" />
+                            </HorizontalStackLayout>
+                        </Border>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+
+            <Button
+                Text="Find Recipes"
+                Command="{Binding SearchRecipesCommand}"
+                IsEnabled="{Binding CanSearchRecipes}"
+                BackgroundColor="#C85A18"
+                TextColor="White" />
         </VerticalStackLayout>
 
-        <CollectionView Grid.Row="1" 
-                        ItemsSource="{Binding Recipes}" 
-                        ItemsLayout="HorizontalList">
+        <VerticalStackLayout Grid.Row="1" Spacing="6">
+            <HorizontalStackLayout
+                Spacing="8"
+                IsVisible="{Binding IsBusy}">
+                <ActivityIndicator IsRunning="{Binding IsBusy}" Color="#C85A18" />
+                <Label
+                    Text="Searching Azure SQL for matching recipes..."
+                    VerticalOptions="Center"
+                    TextColor="#665A50" />
+            </HorizontalStackLayout>
+
+            <Label
+                Text="{Binding ErrorMessage}"
+                TextColor="#B42318"
+                IsVisible="{Binding HasError}" />
+
+            <Label
+                Text="{Binding EmptyMessage}"
+                TextColor="#665A50"
+                IsVisible="{Binding HasEmptyMessage}" />
+        </VerticalStackLayout>
+
+        <Border
+            Grid.Row="2"
+            Padding="14"
+            BackgroundColor="#EAF5E9"
+            Stroke="#B8D7B5"
+            IsVisible="{Binding HasRecommendationMessage}">
+            <Label
+                Text="{Binding RecommendationMessage}"
+                FontAttributes="Bold"
+                TextColor="#255C2A" />
+        </Border>
+
+        <Border
+            Grid.Row="3"
+            Padding="12"
+            BackgroundColor="#FFF1D6"
+            Stroke="#E9C77A"
+            IsVisible="{Binding HasAiStatusMessage}">
+            <Label
+                Text="{Binding AiStatusMessage}"
+                TextColor="#694A00" />
+        </Border>
+
+        <CollectionView
+            Grid.Row="4"
+            ItemsSource="{Binding Recipes}"
+            IsVisible="{Binding HasRecipes}"
+            SelectionMode="None">
+            <CollectionView.ItemsLayout>
+                <LinearItemsLayout Orientation="Vertical" ItemSpacing="12" />
+            </CollectionView.ItemsLayout>
             <CollectionView.ItemTemplate>
-                <DataTemplate x:DataType="models:Recipe">
-
+                <DataTemplate x:DataType="models:RecipeSearchResult">
                     <Border
-                        Padding="15"
-                        Margin="15"
-                        WidthRequest="250"
-                        HeightRequest="250"
-                        HorizontalOptions="Start"
-                        VerticalOptions="Start"
-                        Stroke="LightGray"
-                        StrokeThickness="1">
+                        Padding="16"
+                        BackgroundColor="White"
+                        Stroke="#E5D9CC">
+                        <Border.StrokeShape>
+                            <RoundRectangle CornerRadius="12" />
+                        </Border.StrokeShape>
 
-                        <VerticalStackLayout>
-                            <Label
-                                Text="{Binding Name}"
-                                FontSize="18"
-                                FontAttributes="Bold" />
+                        <VerticalStackLayout Spacing="8">
+                            <Image
+                                Source="{Binding ImageURL}"
+                                HeightRequest="300"
+                                Aspect="AspectFill"
+                                IsVisible="{Binding HasImage}" />
 
                             <Label
-                                Text="{Binding Description}"
-                                FontSize="14" />
+                                Text="{Binding Title}"
+                                FontSize="20"
+                                FontAttributes="Bold"
+                                TextColor="#30271F" />
+
+                            <Label
+                                Text="{Binding Overview}"
+                                FontSize="15"
+                                TextColor="#443A32" />
+
+                            <Label
+                                Text="{Binding WhyItMatches}"
+                                FontSize="14"
+                                TextColor="#443A32" />
+
+                            <Label
+                                Text="{Binding MatchAssessment}"
+                                FontSize="14"
+                                TextColor="#665A50" />
+
+                            <Label
+                                Text="{Binding ReadyInMinutes, StringFormat='Preparation: {0} min'}"
+                                FontSize="13"
+                                TextColor="#665A50" />
+
+                            <Label
+                                Text="{Binding Servings, StringFormat='Servings: {0}'}"
+                                FontSize="13"
+                                TextColor="#665A50" />
+
+                            <Label
+                                Text="{Binding MatchPercentage, StringFormat='Selected ingredient match: {0:F0}%'}"
+                                FontAttributes="Bold"
+                                TextColor="#255C2A" />
+
+                            <Label
+                                Text="{Binding MatchingIngredientCount, StringFormat='Ingredients you selected that this recipe uses: {0}'}"
+                                FontSize="13"
+                                TextColor="#665A50" />
+
+                            <Label
+                                Text="Already in your selection:"
+                                FontAttributes="Bold"
+                                TextColor="#30271F" />
+                            <VerticalStackLayout
+                                BindableLayout.ItemsSource="{Binding MatchingIngredients}"
+                                Spacing="2">
+                                <BindableLayout.ItemTemplate>
+                                    <DataTemplate x:DataType="x:String">
+                                        <Label
+                                            Text="{Binding ., StringFormat='• {0}'}"
+                                            FontSize="13"
+                                            TextColor="#665A50" />
+                                    </DataTemplate>
+                                </BindableLayout.ItemTemplate>
+                            </VerticalStackLayout>
+
+                            <Label
+                                Text="{Binding MissingIngredientCount, StringFormat='Additional recipe ingredients: {0}'}"
+                                FontAttributes="Bold"
+                                TextColor="#9C3D26" />
+
+                            <VerticalStackLayout
+                                BindableLayout.ItemsSource="{Binding MissingIngredients}"
+                                Spacing="2">
+                                <BindableLayout.ItemTemplate>
+                                    <DataTemplate x:DataType="x:String">
+                                        <Label
+                                            Text="{Binding ., StringFormat='• {0}'}"
+                                            FontSize="13"
+                                            TextColor="#665A50" />
+                                    </DataTemplate>
+                                </BindableLayout.ItemTemplate>
+                            </VerticalStackLayout>
+
+                            <Label
+                                Text="Substitution ideas:"
+                                FontAttributes="Bold"
+                                TextColor="#30271F" />
+                            <VerticalStackLayout
+                                BindableLayout.ItemsSource="{Binding Substitutions}"
+                                Spacing="2">
+                                <BindableLayout.ItemTemplate>
+                                    <DataTemplate x:DataType="x:String">
+                                        <Label
+                                            Text="{Binding ., StringFormat='• {0}'}"
+                                            FontSize="13"
+                                            TextColor="#665A50" />
+                                    </DataTemplate>
+                                </BindableLayout.ItemTemplate>
+                            </VerticalStackLayout>
+
+                            <Button
+                                Text="{Binding InstructionsButtonText}"
+                                Clicked="OnToggleInstructionsClicked"
+                                HorizontalOptions="Start"
+                                BackgroundColor="#C85A18"
+                                TextColor="White"
+                                BorderColor="#C85A18"
+                                BorderWidth="1"
+                                CornerRadius="8"
+                                Padding="16,10" />
+
+                            <Label
+                                Text="{Binding Instructions}"
+                                IsVisible="{Binding IsInstructionsVisible}"
+                                FontSize="14"
+                                TextColor="#443A32" />
+
+                            <Button
+                                Text="Open original recipe"
+                                Clicked="OnOpenSourceClicked"
+                                IsVisible="{Binding HasSourceUrl}"
+                                HorizontalOptions="Start"
+                                BackgroundColor="#C85A18"
+                                TextColor="White"
+                                BorderColor="#C85A18"
+                                BorderWidth="1"
+                                CornerRadius="8"
+                                Padding="16,10" />
                         </VerticalStackLayout>
-
                     </Border>
-
                 </DataTemplate>
             </CollectionView.ItemTemplate>
         </CollectionView>
