@@ -29,35 +29,63 @@
             <CollectionView.ItemsLayout>
                 <GridItemsLayout Orientation="Vertical" 
                     Span="4"
-                    HorizontalItemSpacing="5"
-                    VerticalItemSpacing="5" />
+                    HorizontalItemSpacing="15"
+                    VerticalItemSpacing="15" />
             </CollectionView.ItemsLayout>
 
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="models:Recipe">
 
                     <Border
-                        WidthRequest="250"
-                        HeightRequest="250"
+                        WidthRequest="270"
+                        HeightRequest="200"
                         HorizontalOptions="Start"
                         VerticalOptions="Start"
                         StrokeThickness="0"
-                        BackgroundColor="white">
+                        BackgroundColor="white"
+                        StrokeShape="RoundRectangle 25"
+                        Margin="5,5,10,5">
 
-                        <VerticalStackLayout>
-                            <Label
-                                Margin="10"
-                                Text="{Binding Name}"
-                                FontSize="18"
-                                FontAttributes="Bold"
-                                TextColor="black" />
+                        <Grid RowDefinitions="110, *, Auto">
 
-                            <Label
-                                Margin="10"
-                                Text="{Binding Description}"
-                                FontSize="14"
-                                TextColor="black" />
-                        </VerticalStackLayout>
+                                <Image Grid.Row="0"
+                                    Source="{Binding Image}"
+                                    Aspect="AspectFill"/>
+
+                                <Image Grid.Row="0"
+                                        HorizontalOptions="End"
+                                        VerticalOptions="Start"
+                                        Source="{Binding FavoriteStar}"
+                                        WidthRequest="15"
+                                        HeightRequest="15"
+                                        Margin="10"/>
+
+                                <Grid Grid.Row="1"
+                                    ColumnDefinitions="*, Auto"
+                                    Padding="10">
+                                        <Label Margin="10"
+                                        Text="{Binding Name}"
+                                        FontSize="18"
+                                        TextColor="black"
+                                        FontAttributes="Bold"/>
+                                        
+                                        <HorizontalStackLayout Grid.Column="1"
+                                                                Spacing="3">
+                                            <Label Text="{Binding Rating}"
+                                                    TextColor="Black"/>
+
+                                            <Image Source="{Binding Mark}"
+                                                    WidthRequest="15"
+                                                    HeightRequest="15"/>
+
+                                        </HorizontalStackLayout>
+                                </Grid>
+                                <Label Grid.Row="2"
+                                        Margin="15,0,0,10"
+                                        Text="{Binding Description}"
+                                        FontSize="14"
+                                        TextColor="black" />
+                        </Grid>
 
                     </Border>
 
