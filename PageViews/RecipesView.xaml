@@ -34,28 +34,64 @@
                     <!-- Padding adds the gap under each card -->
                     <Grid Padding="0,0,0,12">
 
-                        <!-- same card look as a pantry item, tapping it opens the recipe page -->
-                        <Border BackgroundColor="{StaticResource PantryCard}" StrokeThickness="0"
-                                StrokeShape="RoundRectangle 22">
-                            <Border.GestureRecognizers>
-                                <TapGestureRecognizer Tapped="OnRecipeTapped" />
-                            </Border.GestureRecognizers>
+                        <Border
+                        WidthRequest="270"
+                        HeightRequest="200"
+                        HorizontalOptions="Start"
+                        VerticalOptions="Start"
+                        StrokeThickness="0"
+                        BackgroundColor="white"
+                        StrokeShape="RoundRectangle 25"
+                        Margin="5,5,10,5">
 
-                            <Grid ColumnDefinitions="96,*" HeightRequest="96" ColumnSpacing="14">
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnRecipeTapped" />
+                        </Border.GestureRecognizers>
 
-                                <!-- orange square shows if there is no photo, the photo covers it when there is one -->
-                                <BoxView Color="{StaticResource PantryOrange}" />
-                                <Image Source="{Binding ImageURL}" Aspect="AspectFill"
-                                       IsVisible="{Binding HasImage}" />
+                        <Grid RowDefinitions="110, *, Auto">
 
-                                <!-- title, time and how well it matches the pantry -->
-                                <VerticalStackLayout Grid.Column="1" VerticalOptions="Center"
-                                                     Spacing="2" Padding="0,0,16,0">
-                                    <Label Text="{Binding Title}" Style="{StaticResource ItemTitle}" />
-                                    <Label Text="{Binding Summary}" Style="{StaticResource ItemDetail}" />
-                                    <Label Text="{Binding MatchText}" Style="{StaticResource ItemDetail}" />
-                                </VerticalStackLayout>
-                            </Grid>
+                                <Image Grid.Row="0"
+                                    Source="{Binding ImageURL}"
+                                    Aspect="AspectFill"
+                                    IsVisible="{Binding HasImage}"/>
+
+                                <!-- <Image Grid.Row="0"
+                                        HorizontalOptions="End"
+                                        VerticalOptions="Start"
+                                        Source="{Binding FavoriteStar}"
+                                        WidthRequest="15"
+                                        HeightRequest="15"
+                                        Margin="10"/> -->
+
+                                <Grid Grid.Row="1"
+                                    ColumnDefinitions="*, Auto"
+                                    Padding="10">
+                                        <Label Margin="10"
+                                        Text="{Binding Title}"
+                                        Style="{StaticResource ItemTitle}"
+                                        FontSize="18"
+                                        TextColor="black"
+                                        FontAttributes="Bold"/>
+                                        
+                                        <HorizontalStackLayout Grid.Column="1"
+                                                                Spacing="3">
+                                            <Label Text="{Binding MatchText}" 
+                                                    Style="{StaticResource ItemDetail}"
+                                                    TextColor="Black"/>
+
+                                            <!-- <Image Source="{Binding Mark}"
+                                                    WidthRequest="15"
+                                                    HeightRequest="15"/> -->
+
+                                        </HorizontalStackLayout>
+                                </Grid>
+                                <Label Grid.Row="2"
+                                        Margin="15,0,0,10"
+                                        Text="{Binding Summary}" 
+                                        Style="{StaticResource ItemDetail}"
+                                        FontSize="14"
+                                        TextColor="black" />
+                        </Grid>
 
                         </Border>
                     </Grid>
