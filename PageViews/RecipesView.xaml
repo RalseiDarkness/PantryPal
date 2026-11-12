@@ -8,7 +8,7 @@
              BackgroundColor="{StaticResource PantryBackground}">
 
     <!-- same layout as the pantry page, row 0 header, row 1 list, row 2 controls at the bottom -->
-    <Grid RowDefinitions="Auto,*,Auto" RowSpacing="16" Padding="24,0,24,20" MaximumWidthRequest="680">
+    <Grid RowDefinitions="Auto,*,Auto" RowSpacing="16" Padding="24,0,24,20">
 
         <!-- tabs and page name -->
         <controls:TabHeader PageTitle="Find Recipes" />
@@ -26,6 +26,14 @@
                 </VerticalStackLayout>
             </CollectionView.EmptyView>
 
+            <!-- Makes recipe stay on the same row until 4, then recipe goes to next row -->
+            <CollectionView.ItemsLayout>
+                <GridItemsLayout Orientation="Vertical" 
+                    Span="4"
+                    HorizontalItemSpacing="15"
+                    VerticalItemSpacing="15" />
+            </CollectionView.ItemsLayout>
+
             <CollectionView.ItemTemplate>
 
                 <!-- x:DataType checks every {Binding} name against RecipeSearchResult -->
@@ -34,16 +42,18 @@
                     <!-- Padding adds the gap under each card -->
                     <Grid Padding="0,0,0,12">
 
+                        <!-- Style of the border -->
                         <Border
-                        WidthRequest="270"
-                        HeightRequest="200"
                         HorizontalOptions="Start"
                         VerticalOptions="Start"
                         StrokeThickness="0"
                         BackgroundColor="white"
                         StrokeShape="RoundRectangle 25"
-                        Margin="5,5,10,5">
+                        Margin="5,5,5,5"
+                        MaximumWidthRequest="450"
+                        MaximumHeightRequest="350">
 
+                        <!-- When recipe clicked, takes you to detailed description of recipe -->
                         <Border.GestureRecognizers>
                             <TapGestureRecognizer Tapped="OnRecipeTapped" />
                         </Border.GestureRecognizers>
@@ -73,17 +83,17 @@
                                         TextColor="black"
                                         FontAttributes="Bold"/>
                                         
-                                        <HorizontalStackLayout Grid.Column="1"
+                                        <!-- <HorizontalStackLayout Grid.Column="1"
                                                                 Spacing="3">
                                             <Label Text="{Binding MatchText}" 
                                                     Style="{StaticResource ItemDetail}"
-                                                    TextColor="Black"/>
+                                                    TextColor="Black"/> -->
 
                                             <!-- <Image Source="{Binding Mark}"
                                                     WidthRequest="15"
                                                     HeightRequest="15"/> -->
 
-                                        </HorizontalStackLayout>
+                                        <!-- </HorizontalStackLayout> -->
                                 </Grid>
                                 <Label Grid.Row="2"
                                         Margin="15,0,0,10"
