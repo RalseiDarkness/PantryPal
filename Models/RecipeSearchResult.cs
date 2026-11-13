@@ -26,6 +26,31 @@ public class RecipeSearchResult
     // everything below is made from the data above for the pages to show
     // they only have get, so the json reader skips them
 
+    // shows green checkmark when matches 80% of ingredients, yellow when 50% of ingredients and red when
+    // less than 50%
+
+    public string MatchingImage
+    {
+        get
+        {
+            int matching = MatchingIngredients.Count;
+            int total = MissingIngredients.Count + MatchingIngredients.Count;
+            if(matching/total > 0.8)
+            {
+                return "checkmark.jpg";
+            }
+            else if(matching/total < 0.8 &&
+                    matching/total > 0.5)
+            {
+                return "warning.jpg";
+            }
+            else
+            {
+                return "red_cross.png";
+            }
+        }
+    }
+
     // short line under the title, like 45 min, serves 4
     public string Summary
     {

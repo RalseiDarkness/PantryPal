@@ -73,34 +73,30 @@
                                         HeightRequest="15"
                                         Margin="10"/> -->
 
-                                <Grid Grid.Row="1"
-                                    ColumnDefinitions="*, Auto"
-                                    Padding="10">
-                                        <Label Margin="10"
+                                <Label Grid.Row="1"
+                                        Margin="13"
                                         Text="{Binding Title}"
                                         Style="{StaticResource ItemTitle}"
                                         FontSize="18"
                                         TextColor="black"
                                         FontAttributes="Bold"/>
-                                        
-                                        <!-- <HorizontalStackLayout Grid.Column="1"
-                                                                Spacing="3">
-                                            <Label Text="{Binding MatchText}" 
-                                                    Style="{StaticResource ItemDetail}"
-                                                    TextColor="Black"/> -->
 
-                                            <!-- <Image Source="{Binding Mark}"
-                                                    WidthRequest="15"
-                                                    HeightRequest="15"/> -->
+                                        <Grid ColumnDefinitions="*, Auto"
+                                            Grid.Row="2">
+                                                <Label Grid.Column="0"
+                                                        Margin="13,0,0,17"
+                                                        Text="{Binding ReadyInMinutes, StringFormat='{0} minutes'}"
+                                                        Style="{StaticResource ItemDetail}"
+                                                        FontSize="14"
+                                                        TextColor="black" />
 
-                                        <!-- </HorizontalStackLayout> -->
-                                </Grid>
-                                <Label Grid.Row="2"
-                                        Margin="15,0,0,10"
-                                        Text="{Binding Summary}" 
-                                        Style="{StaticResource ItemDetail}"
-                                        FontSize="14"
-                                        TextColor="black" />
+                                                <Image Grid.Column="1"
+                                                    Margin="0, 0, 10, 15"
+                                                    Source="{Binding MatchingImage}"
+                                                    WidthRequest="30"
+                                                    HeightRequest="30"/>
+
+                                        </Grid>
                         </Grid>
 
                         </Border>
