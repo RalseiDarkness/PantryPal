@@ -37,21 +37,11 @@
                 <Label Text="You still need" Style="{StaticResource SectionTitle}" />
                 <Label Text="{Binding NeedText}" Style="{StaticResource BodyText}" />
 
-                <!-- one label per step, Steps is already numbered -->
-                <Label Text="Steps" Style="{StaticResource SectionTitle}" />
-                <VerticalStackLayout BindableLayout.ItemsSource="{Binding Steps}" Spacing="6">
-                    <BindableLayout.ItemTemplate>
-                        <DataTemplate x:DataType="x:String">
-                            <Label Text="{Binding .}" Style="{StaticResource BodyText}" />
-                        </DataTemplate>
-                    </BindableLayout.ItemTemplate>
-
-                    <!-- shown when the recipe has no steps saved -->
-                    <BindableLayout.EmptyView>
-                        <Label Text="No steps saved for this one, open the original recipe instead."
-                               Style="{StaticResource BodyText}" />
-                    </BindableLayout.EmptyView>
-                </VerticalStackLayout>
+              
+                
+                <!-- Opens recipe step carosuel-->
+                <Button Text="Step-by-step guide" Style="{StaticResource WideButton}"
+                        Clicked="OnCookAlongClicked" Margin="0,8,0,0" />
 
                 <!-- opens the website the recipe came from -->
                 <Button Text="Open original recipe" Style="{StaticResource WideButton}"

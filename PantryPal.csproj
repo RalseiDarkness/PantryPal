@@ -79,10 +79,16 @@
 	  <Compile Update="PageViews\HomeView.xaml.cs">
 	    <DependentUpon>HomeView.xaml</DependentUpon>
 	  </Compile>
+	  <Compile Update="PageViews\CookingStepsView.xaml.cs">
+	    <DependentUpon>CookingStepsView.xaml</DependentUpon>
+	  </Compile>
 	</ItemGroup>
 
 	<ItemGroup>
 	  <MauiXaml Update="PageViews\HomeView.xaml">
+	    <Generator>MSBuild:Compile</Generator>
+	  </MauiXaml>
+	  <MauiXaml Update="PageViews\CookingStepsView.xaml">
 	    <Generator>MSBuild:Compile</Generator>
 	  </MauiXaml>
 	  <MauiXaml Update="PageViews\PantryView.xaml">
