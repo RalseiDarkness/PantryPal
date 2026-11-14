@@ -26,4 +26,19 @@ public partial class RecipeDetailView : ContentPage
     {
         await Launcher.OpenAsync(_recipe.SourceUrl);
     }
+
+    // Opens the step-by-step cooking page
+    private async void OnCookAlongClicked(object? sender, EventArgs e)
+    { 
+        if (_recipe.Steps.Count == 0)
+        {
+            await DisplayAlertAsync(
+                "No steps available",
+                "This recipe doesn't have any cooking instructions.",
+                "OK");
+
+            return;
+        }
+        await Navigation.PushAsync(new CookingStepsView(_recipe));
+    }
 }
