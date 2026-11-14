@@ -74,7 +74,7 @@
                                         Margin="10"/> -->
 
                                 <Label Grid.Row="1"
-                                        Margin="13"
+                                        Margin="13, 13, 13, 0"
                                         Text="{Binding Title}"
                                         Style="{StaticResource ItemTitle}"
                                         FontSize="18"
