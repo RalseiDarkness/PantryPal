@@ -58,20 +58,21 @@
                             <TapGestureRecognizer Tapped="OnRecipeTapped" />
                         </Border.GestureRecognizers>
 
-                        <Grid RowDefinitions="110, *, Auto">
+                        <Grid RowDefinitions="110, *, *, Auto">
 
                                 <Image Grid.Row="0"
                                     Source="{Binding ImageURL}"
                                     Aspect="AspectFill"
                                     IsVisible="{Binding HasImage}"/>
 
-                                <!-- <Image Grid.Row="0"
+                                <ImageButton Grid.Row="0"
                                         HorizontalOptions="End"
                                         VerticalOptions="Start"
                                         Source="{Binding FavoriteStar}"
                                         WidthRequest="15"
                                         HeightRequest="15"
-                                        Margin="10"/> -->
+                                        Margin="10"
+                                        Clicked="OnFavoriteClicked"/>
 
                                 <Label Grid.Row="1"
                                         Margin="13, 13, 13, 0"
@@ -81,22 +82,29 @@
                                         TextColor="black"
                                         FontAttributes="Bold"/>
 
-                                        <Grid ColumnDefinitions="*, Auto"
-                                            Grid.Row="2">
-                                                <Label Grid.Column="0"
-                                                        Margin="13,0,0,17"
-                                                        Text="{Binding ReadyInMinutes, StringFormat='{0} minutes'}"
-                                                        Style="{StaticResource ItemDetail}"
-                                                        FontSize="14"
-                                                        TextColor="black" />
+                                <Grid ColumnDefinitions="*, Auto"
+                                    Grid.Row="2">
+                                    <Label Grid.Column="0"
+                                        Margin="13,0,0,0"
+                                        Text="{Binding ReadyInMinutes, StringFormat='{0} minutes'}"
+                                        Style="{StaticResource ItemDetail}"
+                                        FontSize="14"
+                                        TextColor="black" />
 
-                                                <Image Grid.Column="1"
-                                                    Margin="0, 0, 10, 15"
-                                                    Source="{Binding MatchingImage}"
-                                                    WidthRequest="30"
-                                                    HeightRequest="30"/>
+                                    <Image Grid.Column="1"
+                                        Margin="0, 0, 10, 0"
+                                        Source="{Binding MatchingImage}"
+                                        WidthRequest="30"
+                                        HeightRequest="30"/>
 
-                                        </Grid>
+                                </Grid>
+
+                                <Label Grid.Row="3"
+                                    Margin="13, 0, 13, 10"
+                                    Text="{Binding Servings, StringFormat='Servings: {0}'}"
+                                    Style="{StaticResource ItemDetail}"
+                                    FontSize="14"
+                                    TextColor="black"/>
                         </Grid>
 
                         </Border>
