@@ -27,20 +27,22 @@ Install the .NET 10 SDK and MAUI workload on Windows (Visual Studio with the
 MAUI app as separate processes.
 
 1. Ensure the Azure SQL firewall allows the demo machine and that the signed-in
-   Azure identity can read the existing database tables. The API uses
-   `DefaultAzureCredential`; run `az login` locally if using Azure CLI auth.
-2. Configure the Azure OpenAI-compatible GPT-4o deployment in the API process:
+   Azure CLI identity can read the existing database tables. The API uses
+   `AzureCliCredential` in Development, so run `az login` before starting it.
+   In production, the API uses its managed identity.
+2. The Foundry project endpoint and GPT-4o deployment are configured under
+   `AzureOpenAI` in `PantryPal.Api/appsettings.json`. Environment variables can
+   override these values for local development:
 
    ```powershell
-   $env:AzureOpenAI__Endpoint = "https://<your-resource>.openai.azure.com/"
-   $env:AzureOpenAI__Deployment = "<your-gpt-4o-deployment-name>"
-   $env:AzureOpenAI__ApiVersion = "2024-10-21"
+   $env:AzureOpenAI__Endpoint = "https://SophomoreProject-AI.services.ai.azure.com/openai/v1"
+   $env:AzureOpenAI__Deployment = "gpt-4o"
    ```
 
-   For key authentication, set `AzureOpenAI__ApiKey` in the API process
-   environment. Do not put keys in the MAUI project, source control, or
-   `appsettings.json`. Alternatively, leave the key unset and grant the API's
-   Azure identity the appropriate Azure OpenAI inference role.
+   The API authenticates to Foundry with Microsoft Entra ID using the
+   `https://ai.azure.com/.default` scope. Do not configure an API key. The
+   production managed identity needs the **Cognitive Services OpenAI User**
+   role on the Foundry resource.
 3. Start the API:
 
    ```powershell
@@ -78,11 +80,10 @@ the entire token-acquisition/connection process is capped at 100 seconds.
 Permanent credential, permission, and firewall errors are not retried. The API
 returns a service-unavailable response if the connection window expires.
 
-The AI integration uses the Azure OpenAI deployment-style chat-completions
-endpoint (`/openai/deployments/{deployment}/chat/completions`) and JSON-object
-responses. If your Foundry deployment exposes a different endpoint contract,
-adapt the backend service/configuration to that endpoint; the MAUI app never
-connects directly to Foundry.
+The AI integration uses the Azure OpenAI Responses API at the configured
+Foundry project endpoint (`/openai/v1/responses`). The deployment name is sent
+as the Responses API model value. The MAUI app never connects directly to
+Foundry.
 
 ## Verification
 

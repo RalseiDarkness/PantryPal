@@ -7,13 +7,33 @@ using PantryPal.Api.Models;
 
 namespace PantryPal.Api.Services;
 
-public class RecipeService
+public interface IRecipeRecommendationDataSource
+{
+    Task<List<string>> GetIngredientNamesAsync(
+        IReadOnlyCollection<int> ingredientIds,
+        CancellationToken cancellationToken = default);
+
+    Task<List<RecipeSearchResult>> GetMatchingRecipesAsync(
+        IReadOnlyCollection<int> ingredientIds,
+        IReadOnlyCollection<string> ingredientNames,
+        CancellationToken cancellationToken = default,
+        int? maximumResults = null);
+}
+
+public class RecipeService : IRecipeRecommendationDataSource
 {
     private readonly SqlConnectionFactory _sqlFactory;
 
     public RecipeService(SqlConnectionFactory sqlFactory)
     {
         _sqlFactory = sqlFactory;
+    }
+
+    internal static int[] NormalizeIngredientIds(
+        IReadOnlyCollection<int> ingredientIds)
+    {
+        ArgumentNullException.ThrowIfNull(ingredientIds);
+        return ingredientIds.Distinct().ToArray();
     }
 
     public async Task<List<IngredientSuggestion>> SearchIngredientsAsync(
@@ -136,6 +156,7 @@ public class RecipeService
         IReadOnlyCollection<int> ingredientIds,
         CancellationToken cancellationToken = default)
     {
+        var distinctIngredientIds = NormalizeIngredientIds(ingredientIds);
         var names = new List<string>();
         await using var connection =
             await _sqlFactory.CreateConnectionAsync(cancellationToken);
@@ -151,7 +172,7 @@ public class RecipeService
 
         await using var command = new SqlCommand(sql, connection);
         command.Parameters.Add("@IngredientIdsJson", SqlDbType.NVarChar, -1)
-            .Value = JsonSerializer.Serialize(ingredientIds);
+            .Value = JsonSerializer.Serialize(distinctIngredientIds);
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
@@ -211,6 +232,15 @@ public class RecipeService
         CancellationToken cancellationToken = default,
         int? maximumResults = null)
     {
+        if (maximumResults is <= 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(maximumResults),
+                maximumResults,
+                "Maximum results must be greater than zero.");
+        }
+
+        var distinctIngredientIds = NormalizeIngredientIds(ingredientIds);
         var recipes = new List<RecipeSearchResult>();
 
         await using var connection =
@@ -331,7 +361,7 @@ public class RecipeService
 
         await using var command = new SqlCommand(sql, connection);
         command.Parameters.Add("@IngredientIdsJson", SqlDbType.NVarChar, -1)
-            .Value = JsonSerializer.Serialize(ingredientIds);
+            .Value = JsonSerializer.Serialize(distinctIngredientIds);
         command.Parameters.Add("@IngredientNamesJson", SqlDbType.NVarChar, -1)
             .Value = JsonSerializer.Serialize(ingredientNames);
 

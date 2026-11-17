@@ -10,6 +10,7 @@
 
   <!-- borrows this file from the app, it doesn't use any MAUI code so it works here -->
   <ItemGroup>
+    <ProjectReference Include="../PantryPal.Api/PantryPal.Api.csproj" />
     <Compile Include="../Models/RecipeSearchResult.cs" Link="Models/RecipeSearchResult.cs" />
   </ItemGroup>
 

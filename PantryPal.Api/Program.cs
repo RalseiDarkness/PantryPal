@@ -1,5 +1,8 @@
+#pragma warning disable OPENAI001
 using Azure.Identity;
 using Azure.Core;
+using System.ClientModel.Primitives;
+using OpenAI.Responses;
 using PantryPal.Api.Data;
 using PantryPal.Api.Middleware;
 using PantryPal.Api.Models;
@@ -10,13 +13,35 @@ builder.Services.AddSingleton<TokenCredential>(_ =>
     builder.Environment.IsDevelopment()
         ? new AzureCliCredential()
         : new ManagedIdentityCredential(new ManagedIdentityCredentialOptions()));
+builder.Services.AddSingleton(serviceProvider =>
+    new Lazy<ResponsesClient>(() =>
+    {
+        var configuration = serviceProvider.GetRequiredService<IConfiguration>();
+        var endpointValue = configuration["AzureOpenAI:Endpoint"];
+        if (!Uri.TryCreate(endpointValue, UriKind.Absolute, out var endpoint) ||
+            endpoint.Scheme != Uri.UriSchemeHttps)
+        {
+            throw new InvalidOperationException(
+                "Azure AI Foundry endpoint is not configured as an HTTPS URL.");
+        }
+
+        var credential = serviceProvider.GetRequiredService<TokenCredential>();
+        var options = new ResponsesClientOptions
+        {
+            Endpoint = endpoint,
+            NetworkTimeout = TimeSpan.FromSeconds(60)
+        };
+
+        return new ResponsesClient(
+            new BearerTokenPolicy(credential, "https://ai.azure.com/.default"),
+            options);
+    }));
 builder.Services.AddSingleton<SqlConnectionFactory>();
 builder.Services.AddScoped<RecipeService>();
+builder.Services.AddScoped<IRecipeRecommendationDataSource>(
+    serviceProvider => serviceProvider.GetRequiredService<RecipeService>());
 builder.Services.AddScoped<RecipeRecommendationService>();
-builder.Services.AddHttpClient<AzureAiRecipeAnalysisService>(client =>
-{
-    client.Timeout = TimeSpan.FromSeconds(60);
-});
+builder.Services.AddScoped<AzureAiRecipeAnalysisService>();
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 builder.Services.AddProblemDetails();
 // Add services to the container.
@@ -220,3 +245,4 @@ record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
 {
     public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
 }
+#pragma warning restore OPENAI001

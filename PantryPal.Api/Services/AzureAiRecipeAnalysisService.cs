@@ -1,8 +1,6 @@
-using System.Net.Http.Headers;
-using System.Net.Http.Json;
+#pragma warning disable OPENAI001
 using System.Text.Json;
-using Azure.Core;
-using Azure.Identity;
+using OpenAI.Responses;
 using PantryPal.Api.Models;
 
 namespace PantryPal.Api.Services;
@@ -36,18 +34,15 @@ public sealed class AzureAiRecipeAnalysisService
         return an empty substitutions array.
         """;
 
-    private readonly HttpClient _httpClient;
+    private readonly Lazy<ResponsesClient> _client;
     private readonly IConfiguration _configuration;
-    private readonly TokenCredential _credential;
 
     public AzureAiRecipeAnalysisService(
-        HttpClient httpClient,
-        IConfiguration configuration,
-        TokenCredential credential)
+        Lazy<ResponsesClient> client,
+        IConfiguration configuration)
     {
-        _httpClient = httpClient;
+        _client = client;
         _configuration = configuration;
-        _credential = credential;
     }
 
     public async Task<AiRecipeAnalysis> AnalyzeAsync(
@@ -57,8 +52,6 @@ public sealed class AzureAiRecipeAnalysisService
     {
         var endpointValue = _configuration["AzureOpenAI:Endpoint"];
         var deployment = _configuration["AzureOpenAI:Deployment"];
-        var apiVersion = _configuration["AzureOpenAI:ApiVersion"] ?? "2024-10-21";
-
         if (!Uri.TryCreate(endpointValue, UriKind.Absolute, out var endpoint) ||
             endpoint.Scheme != Uri.UriSchemeHttps ||
             string.IsNullOrWhiteSpace(deployment))
@@ -67,98 +60,49 @@ public sealed class AzureAiRecipeAnalysisService
                 "Azure AI Foundry endpoint and deployment are not configured.");
         }
 
-        var requestUri = new Uri(
-            $"{endpoint.AbsoluteUri.TrimEnd('/')}/openai/deployments/" +
-            $"{Uri.EscapeDataString(deployment)}/chat/completions" +
-            $"?api-version={Uri.EscapeDataString(apiVersion)}");
-
-        using var request = new HttpRequestMessage(HttpMethod.Post, requestUri);
-        var apiKey = _configuration["AzureOpenAI:ApiKey"];
-        if (!string.IsNullOrWhiteSpace(apiKey))
+        var userContent = JsonSerializer.Serialize(new
         {
-            request.Headers.Add("api-key", apiKey);
-        }
-        else
-        {
-            var token = await _credential.GetTokenAsync(
-                new TokenRequestContext(
-                    ["https://cognitiveservices.azure.com/.default"]),
-                cancellationToken);
-            request.Headers.Authorization =
-                new AuthenticationHeaderValue("Bearer", token.Token);
-        }
-
-        request.Content = JsonContent.Create(new
-        {
-            messages = new object[]
+            selectedIngredients,
+            recipes = recipes.Select(recipe => new
             {
-                new { role = "system", content = SystemPrompt },
-                new
-                {
-                    role = "user",
-                    content = JsonSerializer.Serialize(new
-                    {
-                        selectedIngredients,
-                        recipes = recipes.Select(recipe => new
-                        {
-                            recipeId = recipe.RecipeID,
-                            recipe.Title,
-                            recipe.ReadyInMinutes,
-                            recipe.Servings,
-                            recipe.MatchPercentage,
-                            recipe.MatchingIngredients,
-                            recipe.MissingIngredients,
-                            instructions = recipe.Instructions is null
-                                ? null
-                                : recipe.Instructions[..Math.Min(
-                                    recipe.Instructions.Length,
-                                    3000)]
-                        })
-                    }, JsonOptions)
-                }
-            },
-            temperature = 0.2,
-            response_format = new { type = "json_object" }
-        });
+                recipeId = recipe.RecipeID,
+                recipe.Title,
+                recipe.ReadyInMinutes,
+                recipe.Servings,
+                recipe.MatchPercentage,
+                recipe.MatchingIngredients,
+                recipe.MissingIngredients,
+                instructions = recipe.Instructions is null
+                    ? null
+                    : recipe.Instructions[..Math.Min(
+                        recipe.Instructions.Length,
+                        3000)]
+            })
+        }, JsonOptions);
 
-        using var response = await _httpClient.SendAsync(
-            request,
-            HttpCompletionOption.ResponseHeadersRead,
+        var options = new CreateResponseOptions
+        {
+            Model = deployment,
+            Instructions = SystemPrompt,
+            Temperature = 0.2f,
+            MaxOutputTokenCount = 2000,
+            TextOptions = new ResponseTextOptions
+            {
+                TextFormat = ResponseTextFormat.CreateJsonObjectFormat()
+            }
+        };
+        options.InputItems.Add(ResponseItem.CreateUserMessageItem(userContent));
+
+        var response = await _client.Value.CreateResponseAsync(
+            options,
             cancellationToken);
-
-        if (!response.IsSuccessStatusCode)
-        {
-            throw new HttpRequestException(
-                $"Azure AI Foundry returned HTTP {(int)response.StatusCode} " +
-                $"({response.StatusCode}).",
-                inner: null,
-                statusCode: response.StatusCode);
-        }
-
-        await using var responseStream =
-            await response.Content.ReadAsStreamAsync(cancellationToken);
-        using var responseJson = await JsonDocument.ParseAsync(
-            responseStream,
-            cancellationToken: cancellationToken);
-
-        string? content;
-        try
-        {
-            content = responseJson.RootElement
-                .GetProperty("choices")[0]
-                .GetProperty("message")
-                .GetProperty("content")
-                .GetString();
-        }
-        catch (Exception ex) when (
-            ex is KeyNotFoundException or
-                IndexOutOfRangeException or
-                InvalidOperationException)
+        if (response.Value.Status != ResponseStatus.Completed)
         {
             throw new JsonException(
-                "Azure AI Foundry returned an invalid chat completion response.",
-                ex);
+                "Azure AI Foundry returned an incomplete recipe analysis response.");
         }
+
+        var content = response.Value.GetOutputText();
 
         var analysis = string.IsNullOrWhiteSpace(content)
             ? null
@@ -186,16 +130,25 @@ public sealed class AzureAiRecipeAnalysisService
         var analyzedIds = new HashSet<int>();
         foreach (var item in analysis.Recipes)
         {
-            if (!recipeIds.Contains(item.RecipeId) ||
+            if (item is null ||
+                !recipeIds.Contains(item.RecipeId) ||
                 !analyzedIds.Add(item.RecipeId) ||
                 string.IsNullOrWhiteSpace(item.Overview) ||
                 string.IsNullOrWhiteSpace(item.WhyItMatches) ||
                 string.IsNullOrWhiteSpace(item.MatchAssessment) ||
-                item.Substitutions is null)
+                item.Substitutions is null ||
+                item.Substitutions.Any(string.IsNullOrWhiteSpace))
             {
                 throw new JsonException(
                     "Azure AI Foundry returned an invalid recipe analysis.");
             }
         }
+
+        if (!recipeIds.SetEquals(analyzedIds))
+        {
+            throw new JsonException(
+                "Azure AI Foundry did not analyze exactly the supplied recipes.");
+        }
     }
 }
+#pragma warning restore OPENAI001
