@@ -10,7 +10,7 @@ public partial class PantryView : ContentPage
     private readonly PantryService pantry_service = new();
 
     // asks api for ingredient names from the database
-    private readonly RecipeApiService _api = new();
+    private readonly RecipeApiService _api;
 
     // the items on screen
     private readonly ObservableCollection<PantryItem> _items;
@@ -20,8 +20,9 @@ public partial class PantryView : ContentPage
     private int _searchNumber = 0;
 
     // constructor, runs once when first opened
-    public PantryView()
+    public PantryView(RecipeApiService api)
     {
+        _api = api;
         InitializeComponent();
         _items = new ObservableCollection<PantryItem>(pantry_service.Load()); // loads the saved items
         PantryList.ItemsSource = _items; // connects the list to the screen list

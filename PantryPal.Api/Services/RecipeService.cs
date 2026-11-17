@@ -13,11 +13,22 @@ public interface IRecipeRecommendationDataSource
         IReadOnlyCollection<int> ingredientIds,
         CancellationToken cancellationToken = default);
 
+    Task<ResolvedIngredientNames> ResolveIngredientNamesAsync(
+        IReadOnlyCollection<string> ingredientNames,
+        CancellationToken cancellationToken = default);
+
     Task<List<RecipeSearchResult>> GetMatchingRecipesAsync(
         IReadOnlyCollection<int> ingredientIds,
         IReadOnlyCollection<string> ingredientNames,
         CancellationToken cancellationToken = default,
         int? maximumResults = null);
+}
+
+public sealed class ResolvedIngredientNames
+{
+    public List<int> IngredientIds { get; set; } = [];
+    public List<string> ResolvedNames { get; set; } = [];
+    public List<string> UnknownNames { get; set; } = [];
 }
 
 public class RecipeService : IRecipeRecommendationDataSource
@@ -181,6 +192,79 @@ public class RecipeService : IRecipeRecommendationDataSource
         }
 
         return names;
+    }
+
+    public async Task<ResolvedIngredientNames> ResolveIngredientNamesAsync(
+        IReadOnlyCollection<string> ingredientNames,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(ingredientNames);
+
+        var submittedNames = ingredientNames
+            .Select(name => name.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var result = new ResolvedIngredientNames();
+
+        if (submittedNames.Count == 0)
+        {
+            return result;
+        }
+
+        await using var connection =
+            await _sqlFactory.CreateConnectionAsync(cancellationToken);
+
+        const string sql = """
+            WITH Submitted AS (
+                SELECT
+                    submittedName,
+                    ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS NameOrdinal
+                FROM OPENJSON(@SubmittedNamesJson)
+                WITH (submittedName nvarchar(4000) '$') AS submitted
+            )
+            SELECT
+                submitted.submittedName,
+                submitted.NameOrdinal,
+                i.IngredientID,
+                i.IngredientName
+            FROM Submitted AS submitted
+            LEFT JOIN Ingredients AS i
+                ON i.IngredientName COLLATE Latin1_General_100_CI_AS =
+                    submitted.submittedName COLLATE Latin1_General_100_CI_AS
+            ORDER BY submitted.NameOrdinal, i.IngredientID;
+            """;
+
+        await using var command = new SqlCommand(sql, connection);
+        command.Parameters.Add("@SubmittedNamesJson", SqlDbType.NVarChar, -1)
+            .Value = JsonSerializer.Serialize(submittedNames);
+
+        var resolvedIds = new HashSet<int>();
+        var resolvedNames = new Dictionary<string, string>(
+            StringComparer.OrdinalIgnoreCase);
+        var matchedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var submittedName = reader.GetString(0);
+            if (reader.IsDBNull(2))
+            {
+                continue;
+            }
+
+            matchedNames.Add(submittedName);
+            resolvedIds.Add(reader.GetInt32(2));
+            resolvedNames.TryAdd(
+                submittedName,
+                reader.GetString(3));
+        }
+
+        result.IngredientIds = resolvedIds.ToList();
+        result.ResolvedNames = resolvedNames.Values.ToList();
+        result.UnknownNames = submittedNames
+            .Where(name => !matchedNames.Contains(name))
+            .ToList();
+        return result;
     }
 
     public async Task<List<Recipe>> GetAllRecipesAsync(

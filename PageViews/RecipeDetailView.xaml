@@ -30,14 +30,66 @@
                        FontSize="24" LineBreakMode="WordWrap" />
                 <Label Text="{Binding Summary}" Style="{StaticResource ItemDetail}" />
 
+                <Label Text="{Binding Overview}" Style="{StaticResource BodyText}"
+                       IsVisible="{Binding HasOverview}" />
+
+                <Label Text="AI recommendation" Style="{StaticResource SectionTitle}"
+                       IsVisible="{Binding HasWhyItMatches}" />
+                <Label Text="{Binding WhyItMatches}" Style="{StaticResource BodyText}"
+                       IsVisible="{Binding HasWhyItMatches}" />
+
+                <Label Text="Match assessment" Style="{StaticResource SectionTitle}"
+                       IsVisible="{Binding HasMatchAssessment}" />
+                <Label Text="{Binding MatchAssessment}" Style="{StaticResource BodyText}"
+                       IsVisible="{Binding HasMatchAssessment}" />
+
+                <Label Text="{Binding Difficulty, StringFormat='Difficulty: {0}'}"
+                       Style="{StaticResource BodyText}"
+                       IsVisible="{Binding HasDifficulty}" />
+
+                <Label Text="Region of Origin" Style="{StaticResource SectionTitle}"
+                       IsVisible="{Binding HasRegionOfOrigin}" />
+                <Label Text="{Binding RegionOfOrigin}" Style="{StaticResource BodyText}"
+                       IsVisible="{Binding HasRegionOfOrigin}" />
+                <Label Text="Origin Sources" Style="{StaticResource SectionTitle}"
+                       IsVisible="{Binding HasOriginSources}" />
+                <Label Text="{Binding OriginSourcesText}" Style="{StaticResource BodyText}"
+                       IsVisible="{Binding HasOriginSources}" />
+
+                <Label Text="Light or Filling" Style="{StaticResource SectionTitle}"
+                       IsVisible="{Binding HasMealHeaviness}" />
+                <Label Text="{Binding MealHeavinessText}" Style="{StaticResource BodyText}"
+                       IsVisible="{Binding HasMealHeaviness}" />
+
+                <Label Text="Potential Allergens" Style="{StaticResource SectionTitle}"
+                       IsVisible="{Binding HasPotentialAllergens}" />
+                <Label Text="{Binding PotentialAllergensText}" Style="{StaticResource BodyText}"
+                       IsVisible="{Binding HasPotentialAllergens}" />
+                <Label Text="Allergen Evidence" Style="{StaticResource SectionTitle}"
+                       IsVisible="{Binding HasAllergenExplanations}" />
+                <Label Text="{Binding AllergenExplanationsText}" Style="{StaticResource BodyText}"
+                       IsVisible="{Binding HasAllergenExplanations}" />
+
+                <Label Text="Other Considerations" Style="{StaticResource SectionTitle}"
+                       IsVisible="{Binding HasOtherConsiderations}" />
+                <Label Text="{Binding OtherConsiderations}" Style="{StaticResource BodyText}"
+                       IsVisible="{Binding HasOtherConsiderations}" />
+
                 <!-- ingredients from the pantry and the ones still needed -->
-                <Label Text="You have" Style="{StaticResource SectionTitle}" />
-                <Label Text="{Binding HaveText}" Style="{StaticResource BodyText}" />
+                <Label Text="You have" Style="{StaticResource SectionTitle}"
+                       IsVisible="{Binding HasMatchingIngredients}" />
+                <Label Text="{Binding HaveText}" Style="{StaticResource BodyText}"
+                       IsVisible="{Binding HasMatchingIngredients}" />
 
-                <Label Text="You still need" Style="{StaticResource SectionTitle}" />
-                <Label Text="{Binding NeedText}" Style="{StaticResource BodyText}" />
+                <Label Text="You still need" Style="{StaticResource SectionTitle}"
+                       IsVisible="{Binding HasMissingIngredients}" />
+                <Label Text="{Binding NeedText}" Style="{StaticResource BodyText}"
+                       IsVisible="{Binding HasMissingIngredients}" />
 
-              
+                <Label Text="Suggested substitutions" Style="{StaticResource SectionTitle}"
+                       IsVisible="{Binding HasSubstitutions}" />
+                <Label Text="{Binding SubstitutionsText}" Style="{StaticResource BodyText}"
+                       IsVisible="{Binding HasSubstitutions}" />
                 
                 <!-- Opens recipe step carosuel-->
                 <Button Text="Step-by-step guide" Style="{StaticResource WideButton}"

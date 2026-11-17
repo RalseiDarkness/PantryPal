@@ -5,8 +5,8 @@
              BackgroundColor="{StaticResource PantryBackground}">
 
     <Grid Padding="24,20"
-          RowDefinitions="Auto,Auto,*,Auto,Auto"
-          RowSpacing="20"
+          RowDefinitions="Auto,*"
+          RowSpacing="16"
           MaximumWidthRequest="680">
 
         <Button Grid.Row="0"
@@ -18,97 +18,39 @@
                 CornerRadius="12"
                 Padding="16,8" />
 
-        <VerticalStackLayout Grid.Row="1" Spacing="5">
+        <ScrollView Grid.Row="1"
+                    VerticalScrollBarVisibility="Always">
 
-            <Label x:Name="RecipeTitle"
-                   FontSize="26"
-                   FontFamily="OpenSansSemibold"
-                   TextColor="{StaticResource PantryText}" />
+            <VerticalStackLayout Spacing="18">
 
-            <Label x:Name="StepCounter"
-                   Text="Step 1 of 1"
-                   FontSize="15"
-                   FontFamily="OpenSansSemibold"
-                   TextColor="{StaticResource PantryOrange}" />
+                <Label x:Name="RecipeTitle"
+                       FontSize="26"
+                       FontFamily="OpenSansSemibold"
+                       TextColor="{StaticResource PantryText}" />
 
-        </VerticalStackLayout>
+                <Label Text="Cooking instructions"
+                       FontSize="21"
+                       FontFamily="OpenSansSemibold"
+                       TextColor="{StaticResource PantryOrange}" />
 
-        <CarouselView x:Name="StepsCarousel"
-                      Grid.Row="2"
-                      PositionChanged="OnPositionChanged"
-                      IsSwipeEnabled="True"
-                      PeekAreaInsets="0"
-                      HorizontalScrollBarVisibility="Never"
-                      HorizontalOptions="Center"
-                      VerticalOptions="Fill">
+                <Label x:Name="NoInstructionsLabel"
+                       IsVisible="False"
+                       Text="Sorry, no Instructions but visit the website to learn more"
+                       FontSize="17"
+                       TextColor="{StaticResource PantryText}" />
 
-            <CarouselView.ItemsLayout>
-                <LinearItemsLayout Orientation="Horizontal"
-                           SnapPointsType="MandatorySingle"
-                                   ItemSpacing="100"
-                           SnapPointsAlignment="Center" />
+                <VerticalStackLayout x:Name="StepsLayout"
+                                     Spacing="14" />
 
-            </CarouselView.ItemsLayout>
+                <Button x:Name="SourceButton"
+                        Text="Visit original recipe website"
+                        Clicked="OnSourceClicked"
+                        IsVisible="False"
+                        Style="{StaticResource WideButton}" />
 
+            </VerticalStackLayout>
 
-            <CarouselView.ItemTemplate>
-
-                <DataTemplate x:DataType="x:String">
-
-                    <Border BackgroundColor="{StaticResource PantryCard}"
-                            StrokeThickness="0"
-                            StrokeShape="RoundRectangle 22"
-                            Padding="30"
-                            HorizontalOptions="Fill"
-                            VerticalOptions="Fill"
-                            Margin="12,0">
-
-                        <Grid RowDefinitions="Auto,*"
-                              RowSpacing="20">
-
-                            <Label Text="COOKING INSTRUCTION"
-                                   FontSize="13"
-                                   FontFamily="OpenSansSemibold"
-                                   TextColor="{StaticResource PantryMutedText}"
-                                   HorizontalOptions="Center" />
-
-                            <Label Grid.Row="1"
-                                   Text="{Binding .}"
-                                   FontSize="23"
-                                   FontFamily="OpenSansSemibold"
-                                   TextColor="{StaticResource PantryText}"
-                                   HorizontalTextAlignment="Center"
-                                   VerticalTextAlignment="Center"
-                                   LineBreakMode="WordWrap" />
-
-                        </Grid>
-
-                    </Border>
-
-                </DataTemplate>
-            </CarouselView.ItemTemplate>
-
-        </CarouselView>
-
-        <Grid Grid.Row="3"
-              ColumnDefinitions="*,*"
-              ColumnSpacing="12">
-
-            <Button x:Name="PreviousButton"
-                    Grid.Column="0"
-                    Text="Previous Step"
-                    Clicked="OnPreviousClicked"
-                    Style="{StaticResource WideButton}"
-                    BackgroundColor="{StaticResource PantryCard}"
-                    TextColor="{StaticResource PantryText}" />
-
-            <Button x:Name="NextButton"
-                    Grid.Column="1"
-                    Text="Next Step"
-                    Clicked="OnNextClicked"
-                    Style="{StaticResource WideButton}" />
-
-        </Grid>
+        </ScrollView>
 
     </Grid>
 

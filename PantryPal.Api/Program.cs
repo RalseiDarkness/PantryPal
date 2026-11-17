@@ -155,20 +155,53 @@ app.MapPost("/api/recipes/recommendations", async (
     RecipeRecommendationService recommendationService,
     CancellationToken cancellationToken) =>
 {
-    var ingredientIds = request.IngredientIds;
-    if (ingredientIds is null ||
-        ingredientIds.Count == 0 ||
-        ingredientIds.Any(id => id <= 0))
+    var hasIds = request.IngredientIds is not null &&
+        request.IngredientIds.Count > 0;
+    var hasNames = request.IngredientNames is not null &&
+        request.IngredientNames.Count > 0;
+
+    if (hasIds == hasNames)
     {
         return Results.BadRequest(new
         {
-            error = "Provide one or more positive ingredient IDs."
+            error = "Provide exactly one non-empty ingredientIds or ingredientNames list."
         });
     }
 
-    var recommendations = await recommendationService.GetRecommendationsAsync(
-        ingredientIds,
-        cancellationToken);
+    RecipeRecommendationResponse recommendations;
+    if (hasIds)
+    {
+        var ingredientIds = request.IngredientIds!;
+        if (ingredientIds.Any(id => id <= 0))
+        {
+            return Results.BadRequest(new
+            {
+                error = "Ingredient IDs must be positive."
+            });
+        }
+
+        recommendations = await recommendationService.GetRecommendationsAsync(
+            ingredientIds.Distinct().ToArray(),
+            cancellationToken);
+    }
+    else
+    {
+        var ingredientNames = request.IngredientNames!;
+        if (ingredientNames.Any(string.IsNullOrWhiteSpace))
+        {
+            return Results.BadRequest(new
+            {
+                error = "Ingredient names must not be empty."
+            });
+        }
+
+        recommendations = await recommendationService.GetRecommendationsAsync(
+            ingredientNames
+                .Select(name => name.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray(),
+            cancellationToken);
+    }
 
     return Results.Ok(recommendations);
 })

@@ -9,15 +9,16 @@ public partial class RecipesView : ContentPage
     private readonly PantryService pantry_service = new();
 
     // asks the api for recipes from the database
-    private readonly RecipeApiService api_service = new();
+    private readonly RecipeApiService api_service;
 
     // the pantry ingredient names that get searched
     private List<string> _ingredients = new List<string>();
+    private bool _isSearching;
 
-    public RecipesView()
+    public RecipesView(RecipeApiService apiService)
     {
+        api_service = apiService;
         InitializeComponent();
-        OnFindClicked(null, null); // runs the search right away so the user sees something)
     }
 
     // runs every time this tab is shown, so ingredients added on the pantry page show up right away
@@ -46,6 +47,19 @@ public partial class RecipesView : ContentPage
 
     private async void OnFindClicked(object? sender, EventArgs e)
     {
+        if (_isSearching)
+        {
+            return;
+        }
+
+        if (_ingredients.Count == 0)
+        {
+            StatusLabel.Text =
+                "Your pantry is empty. Add ingredients on the My Pantry tab first.";
+            return;
+        }
+
+        _isSearching = true;
         // turns the button off so it can't be pressed twice while searching
         FindButton.IsEnabled = false;
         FindButton.Text = "Searching...";
@@ -53,21 +67,45 @@ public partial class RecipesView : ContentPage
 
         try
         {
-            List<RecipeSearchResult> recipes = await api_service.FindRecipesAsync(_ingredients);
+            RecipeRecommendationResponse result =
+                await api_service.GetRecommendationsAsync(_ingredients);
+            var recipes = result.Recipes.Take(10).ToList();
+            RecipeList.ItemsSource = recipes;
 
-            // the api can send hundreds, Take(20) keeps the first 20, which are the best matches
-            RecipeList.ItemsSource = recipes.Take(20);
-            StatusLabel.Text = "Found " + recipes.Count + " recipes, showing the best ones.";
+            if (recipes.Count == 0)
+            {
+                StatusLabel.Text =
+                    "No matching recipes were found. Try adding more pantry ingredients.";
+            }
+            else if (result.AiAvailable)
+            {
+                var best = recipes.FirstOrDefault(
+                    recipe => recipe.RecipeID == result.BestRecipeId);
+                StatusLabel.Text = result.Recommendation;
+                if (!string.IsNullOrWhiteSpace(result.Recommendation) &&
+                    best is not null)
+                {
+                    StatusLabel.Text += " Best match: " + best.Title + ".";
+                }
+            }
+            else
+            {
+                StatusLabel.Text = string.IsNullOrWhiteSpace(result.AiError)
+                    ? "AI recommendations are unavailable. Showing database matches."
+                    : result.AiError;
+            }
         }
         catch (Exception)
         {
-            // no internet, the api is down, or it took too long
-            StatusLabel.Text = "Couldn't reach the recipe database, check your internet and try again.";
+            RecipeList.ItemsSource = null;
+            StatusLabel.Text =
+                "Couldn't reach the recipe service. Check your internet and try again.";
         }
 
         // puts the button back once the search is done
         FindButton.Text = "Find recipes";
         FindButton.IsEnabled = true;
+        _isSearching = false;
     }
 
     private async void OnRecipeTapped(object? sender, TappedEventArgs e)

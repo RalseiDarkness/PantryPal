@@ -1,82 +1,91 @@
+using Microsoft.Maui.ApplicationModel;
 using Microsoft.Maui.Controls;
-using System;
-using System.Collections.Generic;
+using Microsoft.Maui.Controls.Shapes;
 using PantryPal.Models;
+using System;
 
 namespace PantryPal.PageViews;
 
 public partial class CookingStepsView : ContentPage
 {
-    private readonly List<string> _steps;
+    private readonly RecipeSearchResult _recipe;
 
     public CookingStepsView(RecipeSearchResult recipe)
     {
         InitializeComponent();
 
-        _steps = recipe.Steps ?? new List<string>();
+        _recipe = recipe;
 
         RecipeTitle.Text = recipe.Title;
 
-        StepsCarousel.ItemsSource = _steps;
+        var steps = recipe.GetInstructionSteps();
 
-        StepsCarousel.Position = 0;
+        NoInstructionsLabel.IsVisible = steps.Count == 0;
+        StepsLayout.IsVisible = steps.Count > 0;
 
-        UpdateButtons();
-    }
-
-    private void UpdateButtons()
-    {
-        int position = StepsCarousel.Position;
-
-        StepCounter.Text = $"Step {position + 1} of {_steps.Count}";
-
-        PreviousButton.IsEnabled = position > 0;
-
-        NextButton.Text =
-            position == _steps.Count - 1 ? "Finish" : "Next Step";
-    }
-
-    private void OnPositionChanged(
-        object? sender,
-        PositionChangedEventArgs e)
-    {
-        UpdateButtons();
-    }
-
-    private void OnPreviousClicked(object? sender, EventArgs e)
-    {
-        if (StepsCarousel.Position > 0)
+        for (var index = 0; index < steps.Count; index++)
         {
-            StepsCarousel.ScrollTo(
-                StepsCarousel.Position - 1,
-                position: ScrollToPosition.Center,
-                animate: true);
+            var instructionHeading = new Label
+            {
+                Text = $"Instruction {index + 1}",
+                FontSize = 16,
+                FontFamily = "OpenSansSemibold"
+            };
+            instructionHeading.SetDynamicResource(
+                Label.TextColorProperty,
+                "PantryOrange");
+
+            var instructionText = new Label
+            {
+                Text = steps[index],
+                FontSize = 17,
+                LineBreakMode = LineBreakMode.WordWrap
+            };
+            instructionText.SetDynamicResource(
+                Label.TextColorProperty,
+                "PantryText");
+
+            var instructionContent = new VerticalStackLayout
+            {
+                Spacing = 8,
+                Children = { instructionHeading, instructionText }
+            };
+
+            var instructionCard = new Border
+            {
+                Padding = 18,
+                StrokeThickness = 0,
+                StrokeShape = new RoundRectangle
+                {
+                    CornerRadius = 14
+                },
+                Content = instructionContent
+            };
+
+            instructionCard.SetDynamicResource(
+                Border.BackgroundColorProperty,
+                "PantryCard");
+
+            StepsLayout.Children.Add(instructionCard);
+        }
+
+        SourceButton.IsVisible =
+            Uri.TryCreate(recipe.SourceUrl, UriKind.Absolute, out var uri) &&
+            (uri.Scheme == Uri.UriSchemeHttp ||
+             uri.Scheme == Uri.UriSchemeHttps);
+    }
+
+    private async void OnSourceClicked(object? sender, EventArgs e)
+    {
+        if (Uri.TryCreate(_recipe.SourceUrl, UriKind.Absolute, out var uri) &&
+            (uri.Scheme == Uri.UriSchemeHttp ||
+             uri.Scheme == Uri.UriSchemeHttps))
+        {
+            await Launcher.OpenAsync(uri);
         }
     }
 
-    private async void OnNextClicked(object? sender, EventArgs e)
-    {
-        if (StepsCarousel.Position < _steps.Count - 1)
-        {
-            StepsCarousel.ScrollTo(
-                StepsCarousel.Position + 1,
-                position: ScrollToPosition.Center,
-                animate: true);
-        }
-        else
-        {
-            await DisplayAlertAsync(
-                "Finished",
-                "",
-                "Done");
-
-            await Navigation.PopAsync();
-        }
-    }
-
-    private async void OnBackClicked(
-        object? sender,
-        EventArgs e)
+    private async void OnBackClicked(object? sender, EventArgs e)
     {
         await Navigation.PopAsync();
     }

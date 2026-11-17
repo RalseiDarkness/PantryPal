@@ -54,6 +54,9 @@
                                     <Label Text="{Binding Title}" Style="{StaticResource ItemTitle}" />
                                     <Label Text="{Binding Summary}" Style="{StaticResource ItemDetail}" />
                                     <Label Text="{Binding MatchText}" Style="{StaticResource ItemDetail}" />
+                                    <Label Text="{Binding Difficulty, StringFormat='Difficulty: {0}'}"
+                                           IsVisible="{Binding HasDifficulty}"
+                                           Style="{StaticResource ItemDetail}" />
                                 </VerticalStackLayout>
                             </Grid>
 

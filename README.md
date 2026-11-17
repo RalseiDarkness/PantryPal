@@ -13,9 +13,20 @@ The MAUI app never connects to Azure SQL itself. It calls the deployed PantryPal
 3. **Recipe page** (`PageViews/RecipeDetailView`): tapping a recipe shows what you
    have, what you still need, the steps and a link to the original recipe.
 
-Every build of the app (Debug and Release) uses the deployed API, so it works for
-the whole team without Azure access. To test API changes locally, run the API and
-change `ApiAddress` in `RecipeApiService.cs` to `http://localhost:5222/`.
+Release builds use the deployed API. Debug builds use the local API by default:
+Windows and Mac Catalyst use `http://localhost:5222/`, while Android emulators
+use `http://10.0.2.2:5222/` and iOS simulators use `http://localhost:5222/`.
+Set `PANTRYPAL_API_BASE_URL` in the Debug app process to override its address.
+For physical devices, use a reachable LAN address or the deployed API; mobile
+launch configurations for passing a device-specific override are not included
+in this phase. The API service is registered through MAUI dependency injection;
+API URLs are selected centrally.
+
+On Windows or macOS, select the matching PantryPal desktop configuration in
+VS Code and press F5. The pre-launch task starts the API with its `http` launch
+profile and waits until it listens on port `5222` before the MAUI target starts.
+This requires the .NET MAUI extension and C# Dev Kit, plus the platform's
+installed MAUI workload and selected debug target.
 
 The API also has `POST /api/recipes/recommendations`, which adds Azure AI
 suggestions. The app doesn't use it right now.
@@ -23,8 +34,8 @@ suggestions. The app doesn't use it right now.
 ## Local Windows demo
 
 Install the .NET 10 SDK and MAUI workload on Windows (Visual Studio with the
-.NET MAUI workload and Windows App SDK is recommended). Start the API and the
-MAUI app as separate processes.
+.NET MAUI workload and Windows App SDK is recommended). For VS Code, install
+the .NET MAUI extension and configure its Windows debug target.
 
 1. Ensure the Azure SQL firewall allows the demo machine and that the signed-in
    Azure CLI identity can read the existing database tables. The API uses
@@ -43,17 +54,18 @@ MAUI app as separate processes.
    `https://ai.azure.com/.default` scope. Do not configure an API key. The
    production managed identity needs the **Cognitive Services OpenAI User**
    role on the Foundry resource.
-3. Start the API:
+3. To run the API by itself, start it with:
 
    ```powershell
    dotnet run --project .\PantryPal.Api\PantryPal.Api.csproj --launch-profile http
    ```
 
-   Its HTTP launch profile listens on port `5222`. The app uses the deployed API
-   unless `ApiAddress` in `Services/RecipeApiService.cs` is changed to
-   `http://localhost:5222/`.
+   Its HTTP launch profile listens on port `5222`. When using VS Code F5, skip
+   this manual command: the `PantryPal: Windows Desktop` configuration starts
+   the API task automatically.
 4. In Visual Studio, set PantryPal as the startup project and run the Windows
-   Machine target. On Windows, the app can also be built with:
+   Machine target. In VS Code, select the Windows MAUI debug target. The app can
+   also be built with:
 
    ```powershell
    dotnet build .\PantryPal.csproj -f net10.0-windows10.0.19041.0

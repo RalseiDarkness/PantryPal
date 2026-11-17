@@ -97,12 +97,56 @@ public sealed class RecipeRecommendationService
             recipe.Overview = item.Overview;
             recipe.WhyItMatches = item.WhyItMatches;
             recipe.MatchAssessment = item.MatchAssessment;
+            recipe.Difficulty = item.Difficulty;
+            recipe.RegionOfOrigin = item.RegionOfOrigin;
+            recipe.MealHeaviness = item.MealHeaviness;
+            recipe.MealHeavinessExplanation = item.MealHeavinessExplanation;
+            recipe.PotentialAllergens = item.PotentialAllergens ??
+                throw new JsonException("Azure AI Foundry returned no allergen analysis.");
+            recipe.AllergenAssessment = item.AllergenAssessment;
+            recipe.AllergenExplanations = item.AllergenExplanations ??
+                throw new JsonException("Azure AI Foundry returned no allergen explanations.");
+            recipe.OriginSources = item.OriginSources ??
+                throw new JsonException("Azure AI Foundry returned no origin sources.");
+            recipe.OtherConsiderations = item.OtherConsiderations;
             recipe.Substitutions = item.Substitutions;
         }
 
         result.BestRecipeId = analysis.BestRecipeId;
         result.Recommendation = analysis.Recommendation;
         result.AiAvailable = true;
+        return result;
+    }
+
+    public async Task<RecipeRecommendationResponse> GetRecommendationsAsync(
+        IReadOnlyCollection<string> ingredientNames,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(ingredientNames);
+
+        var resolution = await _recipeService.ResolveIngredientNamesAsync(
+            ingredientNames,
+            cancellationToken);
+
+        if (resolution.UnknownNames.Count > 0)
+        {
+            throw new ArgumentException(
+                "Unknown ingredient names: " +
+                string.Join(", ", resolution.UnknownNames),
+                nameof(ingredientNames));
+        }
+
+        if (resolution.IngredientIds.Count == 0)
+        {
+            throw new ArgumentException(
+                "One or more ingredient names could not be resolved.",
+                nameof(ingredientNames));
+        }
+
+        var result = await GetRecommendationsAsync(
+            resolution.IngredientIds,
+            cancellationToken);
+        result.SelectedIngredients = resolution.ResolvedNames;
         return result;
     }
 
@@ -130,6 +174,33 @@ public sealed class RecipeRecommendationService
                 string.IsNullOrWhiteSpace(item.Overview) ||
                 string.IsNullOrWhiteSpace(item.WhyItMatches) ||
                 string.IsNullOrWhiteSpace(item.MatchAssessment) ||
+                item.Difficulty is not ("Easy" or "Medium" or "Hard") ||
+                string.IsNullOrWhiteSpace(item.RegionOfOrigin) ||
+                item.MealHeaviness is not ("Light" or "Moderate" or "Hearty") ||
+                string.IsNullOrWhiteSpace(item.MealHeavinessExplanation) ||
+                item.PotentialAllergens is null ||
+                item.PotentialAllergens.Any(allergen =>
+                    string.IsNullOrWhiteSpace(allergen) ||
+                    !IsCommonAllergen(allergen)) ||
+                string.IsNullOrWhiteSpace(item.AllergenAssessment) ||
+                item.AllergenExplanations is null ||
+                item.AllergenExplanations.Any(explanation =>
+                    explanation is null ||
+                    !IsCommonAllergen(explanation.Allergen) ||
+                    string.IsNullOrWhiteSpace(explanation.TriggeringIngredient) ||
+                    string.IsNullOrWhiteSpace(explanation.Explanation) ||
+                    explanation.Certainty is not ("Direct" or "Possible")) ||
+                !item.PotentialAllergens.ToHashSet(StringComparer.OrdinalIgnoreCase)
+                    .SetEquals(item.AllergenExplanations.Select(
+                        explanation => explanation.Allergen)) ||
+                string.IsNullOrWhiteSpace(item.OtherConsiderations) ||
+                item.OriginSources is null ||
+                item.OriginSources.Any(source =>
+                    source is null ||
+                    string.IsNullOrWhiteSpace(source.Title) ||
+                    !Uri.TryCreate(source.Url, UriKind.Absolute, out var sourceUri) ||
+                    (sourceUri.Scheme != Uri.UriSchemeHttps &&
+                     sourceUri.Scheme != Uri.UriSchemeHttp)) ||
                 item.Substitutions is null)
             {
                 throw new JsonException(
@@ -144,6 +215,13 @@ public sealed class RecipeRecommendationService
         }
 
         return analysesByRecipeId;
+    }
+
+    private static bool IsCommonAllergen(string allergen)
+    {
+        return allergen.ToLowerInvariant() is
+            "milk" or "eggs" or "fish" or "shellfish" or "tree nuts" or
+            "peanuts" or "wheat" or "soy" or "sesame";
     }
 
     private static bool IsRecoverableAiFailure(Exception exception)

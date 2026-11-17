@@ -31,12 +31,38 @@ public class AzureAiRecipeAnalysisServiceTests
                   "overview": "A simple egg dish.",
                   "whyItMatches": "It uses eggs.",
                   "matchAssessment": "One ingredient is missing.",
+                  "difficulty": "Easy",
+                  "regionOfOrigin": "Unknown; cannot be reliably determined from the recipe data.",
+                  "mealHeaviness": "Moderate",
+                  "mealHeavinessExplanation": "Eggs provide protein, while the preparation is simple.",
+                  "potentialAllergens": ["eggs"],
+                  "allergenAssessment": "Eggs are listed; this assessment does not cover unlisted ingredients or cross-contact.",
+                  "allergenExplanations": [
+                    {
+                      "allergen": "eggs",
+                      "triggeringIngredient": "eggs",
+                      "explanation": "Eggs are a direct source of this allergen.",
+                      "certainty": "Direct"
+                    }
+                  ],
+                  "otherConsiderations": "Unknown whether this recipe meets other dietary needs.",
+                  "originSources": [],
                   "substitutions": ["Use a listed alternative."]
                 }
               ]
             }
             """;
-        var handler = new ResponsesHandler(HttpStatusCode.OK, CreateResponseBody(analysisJson));
+        const string researchFindings = """
+            Recipe ID 42: The origin is uncertain. A historical source describes
+            this dish as associated with the region. Source: Culinary History Society,
+            https://example.org/omelet-origin
+            """;
+        var handler = new ResponsesHandler(
+            HttpStatusCode.OK,
+            CreateResponseBody(analysisJson),
+            researchResponseBody: CreateResponseBody(
+                researchFindings,
+                includeWebSearchCall: true));
         var service = CreateService(handler);
 
         var result = await service.AnalyzeAsync(
@@ -50,29 +76,70 @@ public class AzureAiRecipeAnalysisServiceTests
         Assert.Equal(new Uri($"{Endpoint}/responses"), handler.RequestUri);
         Assert.Equal("Bearer", handler.AuthorizationScheme);
 
-        using var requestBody = JsonDocument.Parse(handler.RequestBody!);
+        Assert.Equal(2, handler.RequestBodies.Count);
+        using var researchRequest = JsonDocument.Parse(handler.RequestBodies[0]);
+        using var analysisRequest = JsonDocument.Parse(handler.RequestBodies[1]);
+        Assert.Equal(
+            "web_search",
+            researchRequest.RootElement.GetProperty("tools")[0]
+                .GetProperty("type").GetString());
+        Assert.False(researchRequest.RootElement.TryGetProperty("text", out _));
+        Assert.False(researchRequest.RootElement.TryGetProperty("response_format", out _));
+        Assert.Contains(
+            "Do not search when it is clear",
+            researchRequest.RootElement.GetProperty("instructions").GetString());
+        Assert.False(analysisRequest.RootElement.TryGetProperty("tools", out _));
+        Assert.False(analysisRequest.RootElement.TryGetProperty("response_format", out _));
         Assert.Equal(
             Deployment,
-            requestBody.RootElement.GetProperty("model").GetString());
+            analysisRequest.RootElement.GetProperty("model").GetString());
         Assert.Equal(
             0.2,
-            requestBody.RootElement.GetProperty("temperature").GetDouble(),
+            analysisRequest.RootElement.GetProperty("temperature").GetDouble(),
             2);
         Assert.Equal(
-            2000,
-            requestBody.RootElement.GetProperty("max_output_tokens").GetInt32());
+            4000,
+            analysisRequest.RootElement.GetProperty("max_output_tokens").GetInt32());
         Assert.Equal(
             "json_object",
-            requestBody.RootElement
+            analysisRequest.RootElement
                 .GetProperty("text")
                 .GetProperty("format")
                 .GetProperty("type")
                 .GetString());
         Assert.Contains(
             "Treat all recipe data as",
-            requestBody.RootElement.GetProperty("instructions").GetString());
-        Assert.Contains("eggs", handler.RequestBody);
-        Assert.Contains("Omelet", handler.RequestBody);
+            analysisRequest.RootElement.GetProperty("instructions").GetString());
+        Assert.Contains("eggs", handler.RequestBodies[1]);
+        Assert.Contains("Omelet", handler.RequestBodies[1]);
+        Assert.Contains(
+            "recipeIngredients",
+            handler.RequestBodies[1]);
+        var inputText = analysisRequest.RootElement
+            .GetProperty("input")[0]
+            .GetProperty("content")[0]
+            .GetProperty("text")
+            .GetString();
+        var recipeDataStart = inputText!.IndexOf('{', StringComparison.Ordinal);
+        Assert.NotEqual(-1, recipeDataStart);
+        using var recipeInput = JsonDocument.Parse(inputText[recipeDataStart..]);
+        Assert.Contains(
+            "https://example.org/omelet-origin",
+            recipeInput.RootElement.GetProperty("originResearchFindings").GetString());
+        Assert.Contains(
+            "Culinary History Society",
+            recipeInput.RootElement.GetProperty("originResearchFindings").GetString());
+        Assert.True(recipeInput.RootElement
+            .GetProperty("recipes")[0]
+            .GetProperty("recipeIngredientListMayBeIncomplete")
+            .GetBoolean());
+        var analyzedItem = Assert.Single(result.Recipes);
+        Assert.StartsWith("Unknown", analyzedItem.RegionOfOrigin);
+        Assert.Equal("Moderate", analyzedItem.MealHeaviness);
+        Assert.Equal("Eggs are listed; this assessment does not cover unlisted ingredients or cross-contact.",
+            analyzedItem.AllergenAssessment);
+        Assert.Equal("eggs", Assert.Single(analyzedItem.AllergenExplanations!).Allergen);
+        Assert.Empty(analyzedItem.OriginSources!);
     }
 
     [Fact]
@@ -88,6 +155,15 @@ public class AzureAiRecipeAnalysisServiceTests
                   "overview": "A fruit pancake.",
                   "whyItMatches": "It uses a selected fruit.",
                   "matchAssessment": "It matches the pantry well.",
+                  "difficulty": "Medium",
+                  "regionOfOrigin": "Unknown; cannot be reliably determined.",
+                  "mealHeaviness": "Light",
+                  "mealHeavinessExplanation": "The listed ingredients and preparation are light.",
+                  "potentialAllergens": [],
+                  "allergenAssessment": "Unknown because the supplied ingredient data is incomplete.",
+                  "allergenExplanations": [],
+                  "otherConsiderations": "Unknown whether this recipe meets other dietary needs.",
+                  "originSources": [],
                   "substitutions": []
                 },
                 {
@@ -95,6 +171,33 @@ public class AzureAiRecipeAnalysisServiceTests
                   "overview": "An egg omelet.",
                   "whyItMatches": "It uses eggs from the pantry.",
                   "matchAssessment": "Cheese is missing.",
+                  "difficulty": "Easy",
+                  "regionOfOrigin": "Unknown; cannot be reliably determined.",
+                  "mealHeaviness": "Hearty",
+                  "mealHeavinessExplanation": "The ingredients and preparation make it filling.",
+                  "potentialAllergens": ["eggs", "milk"],
+                  "allergenAssessment": "Eggs and milk are listed; this does not cover unlisted ingredients or cross-contact.",
+                  "allergenExplanations": [
+                    {
+                      "allergen": "eggs",
+                      "triggeringIngredient": "eggs",
+                      "explanation": "Eggs are a direct source of this allergen.",
+                      "certainty": "Direct"
+                    },
+                    {
+                      "allergen": "milk",
+                      "triggeringIngredient": "cheese",
+                      "explanation": "Cheese is made from milk.",
+                      "certainty": "Direct"
+                    }
+                  ],
+                  "otherConsiderations": "Vegetarian suitability cannot be determined from the available instructions.",
+                  "originSources": [
+                    {
+                      "title": "Culinary History Society",
+                      "url": "https://example.org/omelet-history"
+                    }
+                  ],
                   "substitutions": ["Use another listed cheese."]
                 }
               ]
@@ -119,6 +222,21 @@ public class AzureAiRecipeAnalysisServiceTests
         Assert.Equal("It uses eggs from the pantry.", omelet.WhyItMatches);
         Assert.Equal("Cheese is missing.", omelet.MatchAssessment);
         Assert.Equal("Use another listed cheese.", Assert.Single(omelet.Substitutions));
+        Assert.Equal("Unknown; cannot be reliably determined.", omelet.RegionOfOrigin);
+        Assert.Equal("Hearty", omelet.MealHeaviness);
+        Assert.Equal(["eggs", "milk"], omelet.PotentialAllergens);
+        Assert.Equal(2, omelet.AllergenExplanations.Count);
+        Assert.Equal("cheese", omelet.AllergenExplanations[1].TriggeringIngredient);
+        Assert.Equal("Direct", omelet.AllergenExplanations[1].Certainty);
+        var originSource = Assert.Single(omelet.OriginSources);
+        Assert.Equal("Culinary History Society", originSource.Title);
+        Assert.Equal("https://example.org/omelet-history", originSource.Url);
+        Assert.Equal(
+            "Eggs and milk are listed; this does not cover unlisted ingredients or cross-contact.",
+            omelet.AllergenAssessment);
+        Assert.Equal(
+            "Vegetarian suitability cannot be determined from the available instructions.",
+            omelet.OtherConsiderations);
         Assert.Equal("A fruit pancake.", pancake.Overview);
         Assert.Equal("It uses a selected fruit.", pancake.WhyItMatches);
     }
@@ -139,6 +257,33 @@ public class AzureAiRecipeAnalysisServiceTests
     }
 
     [Fact]
+    public async Task AnalyzeAsync_RejectsMissingSupplementalAnalysisFields()
+    {
+        const string analysisJson = """
+            {
+              "bestRecipeId": 42,
+              "recommendation": "Best match.",
+              "recipes": [
+                {
+                  "recipeId": 42,
+                  "overview": "An egg omelet.",
+                  "whyItMatches": "It uses eggs.",
+                  "matchAssessment": "Cheese is missing.",
+                  "difficulty": "Easy",
+                  "substitutions": []
+                }
+              ]
+            }
+            """;
+        var service = CreateService(new ResponsesHandler(
+            HttpStatusCode.OK,
+            CreateResponseBody(analysisJson)));
+
+        await Assert.ThrowsAsync<JsonException>(() =>
+            service.AnalyzeAsync(["eggs"], [CreateRecipe()]));
+    }
+
+    [Fact]
     public async Task AnalyzeAsync_RejectsIncompleteResponses()
     {
         const string analysisJson = """
@@ -151,6 +296,15 @@ public class AzureAiRecipeAnalysisServiceTests
                   "overview": "An egg omelet.",
                   "whyItMatches": "It uses eggs.",
                   "matchAssessment": "Cheese is missing.",
+                  "difficulty": "Easy",
+                  "regionOfOrigin": "Unknown.",
+                  "mealHeaviness": "Moderate",
+                  "mealHeavinessExplanation": "Moderate based on the ingredients and preparation.",
+                  "potentialAllergens": [],
+                  "allergenAssessment": "Unknown; the ingredient information is insufficient.",
+                  "allergenExplanations": [],
+                  "otherConsiderations": "Unknown.",
+                  "originSources": [],
                   "substitutions": []
                 }
               ]
@@ -177,6 +331,15 @@ public class AzureAiRecipeAnalysisServiceTests
                   "overview": "An egg omelet.",
                   "whyItMatches": "It uses eggs.",
                   "matchAssessment": "Cheese is missing.",
+                  "difficulty": "Easy",
+                  "regionOfOrigin": "Unknown.",
+                  "mealHeaviness": "Moderate",
+                  "mealHeavinessExplanation": "Moderate based on the ingredients and preparation.",
+                  "potentialAllergens": [],
+                  "allergenAssessment": "Unknown; the ingredient information is insufficient.",
+                  "allergenExplanations": [],
+                  "otherConsiderations": "Unknown.",
+                  "originSources": [],
                   "substitutions": []
                 }
               ]
@@ -196,7 +359,7 @@ public class AzureAiRecipeAnalysisServiceTests
     }
 
     [Fact]
-    public async Task Recommendations_ReturnDatabaseResultsWhenFoundryFails()
+    public async Task Recommendations_ReturnDatabaseResultsWhenAnalysisFails()
     {
         var handler = new ResponsesHandler(
             HttpStatusCode.ServiceUnavailable,
@@ -215,6 +378,150 @@ public class AzureAiRecipeAnalysisServiceTests
         Assert.False(string.IsNullOrEmpty(result.AiError));
         Assert.Equal(10, dataSource.MaximumResults);
         Assert.Equal([7], dataSource.ReceivedIngredientIds);
+    }
+
+    [Fact]
+    public async Task Recommendations_ContinueAnalysisWhenOriginResearchRequestFails()
+    {
+        const string analysisJson = """
+            {
+              "bestRecipeId": 42,
+              "recommendation": "A suitable recipe match.",
+              "recipes": [{
+                "recipeId": 42,
+                "overview": "An egg omelet.",
+                "whyItMatches": "It uses eggs.",
+                "matchAssessment": "Cheese is missing.",
+                "difficulty": "Easy",
+                "regionOfOrigin": "Unknown; research was unavailable.",
+                "mealHeaviness": "Moderate",
+                "mealHeavinessExplanation": "Based on the ingredients and preparation.",
+                "potentialAllergens": ["eggs"],
+                "allergenAssessment": "Eggs are listed. Cross-contamination and manufacturing traces cannot be determined from recipe data.",
+                "allergenExplanations": [{
+                  "allergen": "eggs",
+                  "triggeringIngredient": "eggs",
+                  "explanation": "Eggs are a direct source of this allergen.",
+                  "certainty": "Direct"
+                }],
+                "otherConsiderations": "Unknown.",
+                "originSources": [],
+                "substitutions": []
+              }]
+            }
+            """;
+        var databaseResult = CreateRecipe();
+        var handler = new ResponsesHandler(
+            HttpStatusCode.OK,
+            CreateResponseBody(analysisJson),
+            researchStatusCode: HttpStatusCode.ServiceUnavailable,
+            researchResponseBody:
+                """{"error":{"message":"Search unavailable","type":"server_error"}}""");
+        var recommendationService = new RecipeRecommendationService(
+            new FakeRecipeDataSource([databaseResult]),
+            CreateService(handler),
+            NullLogger<RecipeRecommendationService>.Instance);
+
+        var result = await recommendationService.GetRecommendationsAsync([7]);
+
+        Assert.True(result.AiAvailable);
+        Assert.Single(result.Recipes);
+        Assert.True(handler.RequestBodies.Count >= 2);
+        using var analysisRequest = JsonDocument.Parse(handler.RequestBodies[^1]);
+        Assert.False(analysisRequest.RootElement.TryGetProperty("tools", out _));
+        Assert.Contains(
+            "Origin research was unavailable",
+            handler.RequestBodies[^1]);
+    }
+
+    [Fact]
+    public async Task Recommendations_KeepSqlMatchesWhenWebSearchCallFails()
+    {
+        const string analysisJson = """
+            {
+              "bestRecipeId": 42,
+              "recommendation": "A suitable recipe match.",
+              "recipes": [{
+                "recipeId": 42,
+                "overview": "An egg omelet.",
+                "whyItMatches": "It uses eggs.",
+                "matchAssessment": "Cheese is missing.",
+                "difficulty": "Easy",
+                "regionOfOrigin": "Unknown; credible origin evidence was unavailable.",
+                "mealHeaviness": "Moderate",
+                "mealHeavinessExplanation": "Based on the ingredients and preparation.",
+                "potentialAllergens": ["eggs"],
+                "allergenAssessment": "Eggs are listed. Cross-contamination and manufacturing traces cannot be determined from recipe data.",
+                "allergenExplanations": [{
+                  "allergen": "eggs",
+                  "triggeringIngredient": "eggs",
+                  "explanation": "Eggs are a direct source of this allergen.",
+                  "certainty": "Direct"
+                }],
+                "otherConsiderations": "Unknown.",
+                "originSources": [],
+                "substitutions": []
+              }]
+            }
+            """;
+        var databaseResult = CreateRecipe();
+        var handler = new ResponsesHandler(
+            HttpStatusCode.OK,
+            CreateResponseBody(analysisJson),
+            researchResponseBody: CreateResponseBody(
+                "Origin research could not be completed.",
+                includeWebSearchCall: true,
+                webSearchFailed: true));
+        var recommendationService = new RecipeRecommendationService(
+            new FakeRecipeDataSource([databaseResult]),
+            CreateService(handler),
+            NullLogger<RecipeRecommendationService>.Instance);
+
+        var result = await recommendationService.GetRecommendationsAsync([7]);
+
+        Assert.Same(databaseResult, Assert.Single(result.Recipes));
+        Assert.True(result.AiAvailable);
+        Assert.StartsWith("Unknown", databaseResult.RegionOfOrigin);
+        Assert.Empty(databaseResult.OriginSources);
+        Assert.Contains(
+            "Origin research was unavailable",
+            handler.RequestBodies[1]);
+    }
+
+    [Fact]
+    public async Task Recommendations_AreSupportedByIngredientNames()
+    {
+        var dataSource = new FakeRecipeDataSource([CreateRecipe()]);
+        var recommendationService = new RecipeRecommendationService(
+            dataSource,
+            CreateService(new ResponsesHandler(
+                HttpStatusCode.ServiceUnavailable,
+                "{}")),
+            NullLogger<RecipeRecommendationService>.Instance);
+
+        var result = await recommendationService.GetRecommendationsAsync(["eggs"]);
+
+        Assert.Equal(["eggs"], result.SelectedIngredients);
+        Assert.Equal([7], dataSource.ReceivedIngredientIds);
+    }
+
+    [Fact]
+    public async Task Recommendations_RejectUnknownIngredientNames()
+    {
+        var dataSource = new FakeRecipeDataSource(
+            [CreateRecipe()],
+            unknownNames: ["dragon fruit"]);
+        var recommendationService = new RecipeRecommendationService(
+            dataSource,
+            CreateService(new ResponsesHandler(
+                HttpStatusCode.OK,
+                "{}")),
+            NullLogger<RecipeRecommendationService>.Instance);
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() =>
+            recommendationService.GetRecommendationsAsync(["dragon fruit"]));
+
+        Assert.Contains("dragon fruit", exception.Message);
     }
 
     [Fact]
@@ -293,13 +600,50 @@ public class AzureAiRecipeAnalysisServiceTests
 
         return new AzureAiRecipeAnalysisService(
             new Lazy<ResponsesClient>(() => client),
-            configuration);
+            configuration,
+            NullLogger<AzureAiRecipeAnalysisService>.Instance);
     }
 
     private static string CreateResponseBody(
         string modelOutput,
-        string responseStatus = "completed")
+        string responseStatus = "completed",
+        bool includeWebSearchCall = false,
+        bool webSearchFailed = false)
     {
+        var message = new
+        {
+            id = "msg_test",
+            type = "message",
+            role = "assistant",
+            status = "completed",
+            content = new[]
+            {
+                new
+                {
+                    type = "output_text",
+                    text = modelOutput,
+                    annotations = Array.Empty<object>()
+                }
+            }
+        };
+        var output = includeWebSearchCall
+            ? new object[]
+            {
+                new
+                {
+                    id = "web_search_test",
+                    type = "web_search_call",
+                    status = webSearchFailed ? "failed" : "completed",
+                    action = new
+                    {
+                        type = "search",
+                        query = "omelet history"
+                    }
+                },
+                message
+            }
+            : [message];
+
         return JsonSerializer.Serialize(new
         {
             id = "resp_test",
@@ -307,25 +651,7 @@ public class AzureAiRecipeAnalysisServiceTests
             created_at = 1763313600,
             status = responseStatus,
             model = Deployment,
-            output = new[]
-            {
-                new
-                {
-                    id = "msg_test",
-                    type = "message",
-                    role = "assistant",
-                    status = "completed",
-                    content = new[]
-                    {
-                        new
-                        {
-                            type = "output_text",
-                            text = modelOutput,
-                            annotations = Array.Empty<object>()
-                        }
-                    }
-                }
-            }
+            output
         });
     }
 
@@ -349,34 +675,50 @@ public class AzureAiRecipeAnalysisServiceTests
     private sealed class ResponsesHandler(
         HttpStatusCode statusCode,
         string responseBody = "",
-        Exception? responseException = null) : HttpMessageHandler
+        Exception? responseException = null,
+        HttpStatusCode researchStatusCode = HttpStatusCode.OK,
+        string? researchResponseBody = null,
+        Exception? researchResponseException = null) : HttpMessageHandler
     {
+        private readonly string _researchResponseBody =
+            researchResponseBody ??
+            CreateResponseBody("No origin research was needed.");
+
         public Uri? RequestUri { get; private set; }
 
         public string? AuthorizationScheme { get; private set; }
 
         public string? RequestBody { get; private set; }
 
+        public List<string> RequestBodies { get; } = [];
+
         protected override async Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request,
             CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (responseException is not null)
-            {
-                throw responseException;
-            }
-
             RequestUri = request.RequestUri;
             AuthorizationScheme = request.Headers.Authorization?.Scheme;
             RequestBody = request.Content is null
                 ? null
                 : await request.Content.ReadAsStringAsync(cancellationToken);
+            RequestBodies.Add(RequestBody ?? string.Empty);
+            using var requestJson = JsonDocument.Parse(RequestBody ?? "{}");
+            var isResearchRequest =
+                requestJson.RootElement.TryGetProperty("tools", out _);
+            var responseError = isResearchRequest
+                ? researchResponseException
+                : responseException;
+            if (responseError is not null)
+            {
+                throw responseError;
+            }
 
-            return new HttpResponseMessage(statusCode)
+            return new HttpResponseMessage(
+                isResearchRequest ? researchStatusCode : statusCode)
             {
                 Content = new StringContent(
-                    responseBody,
+                    isResearchRequest ? _researchResponseBody : responseBody,
                     Encoding.UTF8,
                     "application/json")
             };
@@ -403,7 +745,8 @@ public class AzureAiRecipeAnalysisServiceTests
 
     private sealed class FakeRecipeDataSource(
         List<RecipeSearchResult> recipes,
-        CancellationTokenSource? cancelAfterSearch = null)
+        CancellationTokenSource? cancelAfterSearch = null,
+        string[]? unknownNames = null)
         : IRecipeRecommendationDataSource
     {
         public int? MaximumResults { get; private set; }
@@ -416,6 +759,18 @@ public class AzureAiRecipeAnalysisServiceTests
         {
             ReceivedIngredientIds = ingredientIds.ToArray();
             return Task.FromResult(new List<string> { "eggs" });
+        }
+
+        public Task<ResolvedIngredientNames> ResolveIngredientNamesAsync(
+            IReadOnlyCollection<string> ingredientNames,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new ResolvedIngredientNames
+            {
+                IngredientIds = [7],
+                ResolvedNames = ["eggs"],
+                UnknownNames = unknownNames?.ToList() ?? []
+            });
         }
 
         public Task<List<RecipeSearchResult>> GetMatchingRecipesAsync(
