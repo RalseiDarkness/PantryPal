@@ -1,5 +1,6 @@
 using PantryPal.Models;
 using PantryPal.Services;
+using System.IO;
 
 namespace PantryPal.PageViews;
 
@@ -14,10 +15,12 @@ public partial class RecipesView : ContentPage
     // the pantry ingredient names that get searched
     private List<string> _ingredients = new List<string>();
 
+    private readonly string favoritePath = "favorite_list.txt";
+
     public RecipesView()
     {
         InitializeComponent();
-        OnFindClicked(null, null); // runs the search right away so the user sees something)
+        //OnFindClicked(null, null); // runs the search right away so the user sees something)
     }
 
     // runs every time this tab is shown, so ingredients added on the pantry page show up right away
@@ -68,6 +71,66 @@ public partial class RecipesView : ContentPage
         // puts the button back once the search is done
         FindButton.Text = "Find recipes";
         FindButton.IsEnabled = true;
+    }
+
+    private async void OnFavoriteClicked(object? sender, EventArgs e)
+    {
+        // create empty filestream
+        // checks if file exists, if not, creats new one
+        // uses "using" so the stream will automatically close after writing in it
+        using (FileStream fs = new FileStream(favoritePath, FileMode.OpenOrCreate, FileAccess.ReadWrite))
+        {
+            fs.Seek(0, SeekOrigin.End);
+
+        // specifies specific collection view object
+        if (sender is ImageButton button &&
+            button.BindingContext is RecipeSearchResult model)
+        {
+            // gets bool value from binding model and checks it
+            // if not favorite, adds recipe title name to the file
+                if(model.IsFavorite == false)
+                {
+                    using (StreamWriter writer = new StreamWriter(fs))
+                    {
+                        writer.WriteLine("{Binding Title}");
+                    }
+
+                    model.IsFavorite = true;
+                }
+
+                // if favorite, searches for every recipe title that is not one right now, and rewrites file with them
+                else
+                {
+                    List<string> titles = new List<string>();
+
+                    using (StreamReader reader = new StreamReader(fs, leaveOpen: true))
+                    {
+                        string? title = null;
+                        while( (title = reader.ReadLine()) != null)
+                        {
+                            if(title != model.Title)
+                            {
+                                titles.Add(title);
+                            }
+                        }    
+                    }
+
+                    // puts stream cursor position back to the start and wipes whole file
+                    fs.Position = 0;
+                    fs.SetLength(0);
+
+                    using (StreamWriter writer = new StreamWriter(fs))
+                    {
+                        foreach(string title in titles)
+                        {
+                            writer.WriteLine(title);
+                        }
+                    }
+
+                    model.IsFavorite = false;
+                }
+        }
+        }
     }
 
     private async void OnRecipeTapped(object? sender, TappedEventArgs e)

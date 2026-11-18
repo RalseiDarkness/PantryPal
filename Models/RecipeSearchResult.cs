@@ -1,10 +1,12 @@
+using System.Collections.Specialized;
 using System.Net;
+using System.ComponentModel;
 
 namespace PantryPal.Models;
 
 // one recipe sent back by the api
 // the property names match the api's json, capitals don't matter when it's read
-public class RecipeSearchResult
+public class RecipeSearchResult : INotifyPropertyChanged
 {
     public string Title { get; set; } = "";
     public string ImageURL { get; set; } = "";
@@ -25,6 +27,75 @@ public class RecipeSearchResult
 
     // everything below is made from the data above for the pages to show
     // they only have get, so the json reader skips them
+
+    
+    //this one this specifically to detect changes in UI
+
+    // event listener waits for properties to change
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    // special case bool to check if item is already favorite, actual value of it
+    private bool isFavorite = false;
+
+    // tells UI there were changes in parametrs and refreshed it, public value that broadcasts update
+    public bool IsFavorite
+    {
+        get => isFavorite;
+        set
+        {
+            if (isFavorite != value)
+            {
+                isFavorite = value;
+
+                PropertyChanged?.Invoke(this,
+                    new PropertyChangedEventArgs(nameof(IsFavorite)));
+
+                PropertyChanged?.Invoke(this,
+                    new PropertyChangedEventArgs(nameof(FavoriteStar)));
+            }
+        }
+    }
+
+    // special case for favorite image change, depends on isFavorite bool value
+    public string FavoriteStar
+    {
+        get
+        {
+            if(isFavorite)
+            {
+                return "golden_star.png";
+            }
+            else
+            {
+                return "hollow_star.png";
+            }
+        }
+    }
+
+    // shows green checkmark when matches 80% of ingredients, yellow when 50% of ingredients and red when
+    // less than 50%
+
+    public string MatchingImage
+    {
+        get
+        {
+            int matching = MatchingIngredients.Count;
+            int total = MissingIngredients.Count + MatchingIngredients.Count;
+            if(matching/total > 0.8)
+            {
+                return "checkmark.jpg";
+            }
+            else if(matching/total < 0.8 &&
+                    matching/total > 0.5)
+            {
+                return "warning.jpg";
+            }
+            else
+            {
+                return "red_cross.png";
+            }
+        }
+    }
 
     // short line under the title, like 45 min, serves 4
     public string Summary
