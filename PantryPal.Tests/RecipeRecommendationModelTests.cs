@@ -3,6 +3,7 @@ using PantryPal.Models;
 
 namespace PantryPal.Tests;
 
+/// Checks that API JSON fields deserialize into the MAUI display model.
 public class RecipeRecommendationModelTests
 {
     [Fact]
@@ -44,7 +45,9 @@ public class RecipeRecommendationModelTests
               "bestRecipeId":42,
               "recommendation":"Choose the omelet.",
               "aiAvailable":true,
-              "aiError":null
+              "aiError":null,
+              "complexityAvailable":true,
+              "complexityError":null
             }
             """;
 
@@ -54,6 +57,7 @@ public class RecipeRecommendationModelTests
 
         Assert.NotNull(response);
         Assert.True(response.AiAvailable);
+        Assert.True(response.ComplexityAvailable);
         Assert.Equal("Choose the omelet.", response.Recommendation);
         var recipe = Assert.Single(response.Recipes);
         Assert.Equal(42, recipe.RecipeID);

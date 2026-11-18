@@ -6,10 +6,15 @@ using System;
 
 namespace PantryPal.PageViews;
 
+/// <summary>
+/// Presents every stored instruction in a scrollable sequence and links back to
+/// the source recipe when its URL is valid.
+/// </summary>
 public partial class CookingStepsView : ContentPage
 {
     private readonly RecipeSearchResult _recipe;
 
+    ///Builds the instruction cards from the selected recipe's HTML steps.
     public CookingStepsView(RecipeSearchResult recipe)
     {
         InitializeComponent();
@@ -18,6 +23,8 @@ public partial class CookingStepsView : ContentPage
 
         RecipeTitle.Text = recipe.Title;
 
+        // The shared model parser handles source HTML and entities before each
+        // returned line is rendered as its own numbered card.
         var steps = recipe.GetInstructionSteps();
 
         NoInstructionsLabel.IsVisible = steps.Count == 0;
@@ -69,6 +76,7 @@ public partial class CookingStepsView : ContentPage
             StepsLayout.Children.Add(instructionCard);
         }
 
+        // Only expose external navigation for absolute web URLs.
         SourceButton.IsVisible =
             Uri.TryCreate(recipe.SourceUrl, UriKind.Absolute, out var uri) &&
             (uri.Scheme == Uri.UriSchemeHttp ||

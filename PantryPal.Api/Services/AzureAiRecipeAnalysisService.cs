@@ -9,8 +9,15 @@ using PantryPal.Api.Models;
 
 namespace PantryPal.Api.Services;
 
+/// Uses Azure AI Foundry's Responses API for recipe-origin research, full recipe
+/// analysis, and compact complexity ratings.
 public sealed class AzureAiRecipeAnalysisService
 {
+    // Keep recommendation-page requests small and bounded; full analysis uses a
+    // separate, on-demand request so large result sets do not incur that cost.
+    private const int ComplexityBatchSize = 10;
+    private const int MaximumConcurrentComplexityBatches = 2;
+
     private static readonly JsonSerializerOptions JsonOptions =
         new(JsonSerializerDefaults.Web);
 
@@ -33,6 +40,26 @@ public sealed class AzureAiRecipeAnalysisService
         evidence, and source titles with direct URLs when sources were found. Do not
         invent search findings or citations. If no credible evidence is available,
         say so explicitly.
+        """;
+
+    private const string ComplexitySystemPrompt = """
+        Classify the preparation complexity of every supplied recipe as Easy, Medium,
+        or Hard. Base the rating primarily on the listed ingredients, quantities when
+        provided, and cooking techniques and instructions. Cooking time alone is not
+        a valid basis for the rating.
+
+        Return only a JSON object with this shape:
+        {
+          "recipes": [
+            {
+              "recipeId": 1,
+              "difficulty": "Easy"
+            }
+          ]
+        }
+        Include exactly one entry per supplied recipe and preserve each recipeId.
+        Do not include an overview, recommendation, origin, allergens, substitutions,
+        or any other analysis.
         """;
 
     private const string SystemPrompt = """
@@ -119,6 +146,7 @@ public sealed class AzureAiRecipeAnalysisService
     private readonly IConfiguration _configuration;
     private readonly ILogger<AzureAiRecipeAnalysisService> _logger;
 
+    /// Creates the service with a lazily initialized Foundry client.
     public AzureAiRecipeAnalysisService(
         Lazy<ResponsesClient> client,
         IConfiguration configuration,
@@ -129,26 +157,25 @@ public sealed class AzureAiRecipeAnalysisService
         _logger = logger;
     }
 
+    /// Generates full analysis for the supplied recipes. Origin research, when
+    /// needed, is requested separately before the structured analysis request.
+
     public async Task<AiRecipeAnalysis> AnalyzeAsync(
         IReadOnlyCollection<string> selectedIngredients,
         IReadOnlyCollection<RecipeSearchResult> recipes,
         CancellationToken cancellationToken = default)
     {
-        var endpointValue = _configuration["AzureOpenAI:Endpoint"];
-        var deployment = _configuration["AzureOpenAI:Deployment"];
-        if (!Uri.TryCreate(endpointValue, UriKind.Absolute, out var endpoint) ||
-            endpoint.Scheme != Uri.UriSchemeHttps ||
-            string.IsNullOrWhiteSpace(deployment))
-        {
-            throw new InvalidOperationException(
-                "Azure AI Foundry endpoint and deployment are not configured.");
-        }
+        var deployment = GetConfiguredDeployment();
 
+        // The research request may use web search, while the subsequent analysis
+        // request uses JSON mode; the Responses API does not allow both together.
         var researchFindings = await TryResearchOriginsAsync(
             deployment,
             recipes,
             cancellationToken);
 
+        // The structured stage receives all database-known ingredients (matched
+        // and missing) plus instructions, not just the pantry subset.
         var userContent = JsonSerializer.Serialize(new
         {
             selectedIngredients,
@@ -208,6 +235,358 @@ public sealed class AzureAiRecipeAnalysisService
         return analysis!;
     }
 
+    /// Returns validated Easy/Medium/Hard ratings keyed by recipe ID. A failed
+    /// batch contributes no entries, allowing callers to retain successful batches.
+
+    public async Task<IReadOnlyDictionary<int, string>> AnalyzeComplexitiesAsync(
+        IReadOnlyCollection<RecipeSearchResult> recipes,
+        CancellationToken cancellationToken = default)
+    {
+        if (recipes.Count == 0)
+        {
+            return new Dictionary<int, string>();
+        }
+
+        string deployment;
+        try
+        {
+            deployment = GetConfiguredDeployment();
+        }
+        catch (InvalidOperationException exception)
+        {
+            _logger.LogWarning(
+                "Recipe complexity analysis configuration failed: {ExceptionType}: {ExceptionMessage}",
+                exception.GetType().Name,
+                exception.Message);
+            return new Dictionary<int, string>();
+        }
+
+        var batches = recipes
+            .Select((recipe, index) => (recipe, index))
+            .GroupBy(item => item.index / ComplexityBatchSize)
+            .Select((group, index) => new ComplexityBatch(
+                index + 1,
+                group.Select(item => item.recipe).ToArray()))
+            .ToArray();
+
+        // Launch all batch tasks but gate the actual requests to protect the
+        // deployment from a burst of concurrent calls.
+        using var concurrencyLimiter =
+            new SemaphoreSlim(MaximumConcurrentComplexityBatches);
+        var batchTasks = batches.Select(async batch =>
+        {
+            await concurrencyLimiter.WaitAsync(cancellationToken);
+            try
+            {
+                return await AnalyzeComplexityBatchAsync(
+                    deployment,
+                    batch,
+                    cancellationToken);
+            }
+            finally
+            {
+                concurrencyLimiter.Release();
+            }
+        });
+
+        // IDs should be unique across SQL results. If a collision nevertheless
+        // occurs, discard it instead of assigning an ambiguous rating.
+        var results = new Dictionary<int, string>();
+        var ambiguousRecipeIds = new HashSet<int>();
+        foreach (var batchResult in await Task.WhenAll(batchTasks))
+        {
+            foreach (var (recipeId, difficulty) in batchResult.Results)
+            {
+                if (ambiguousRecipeIds.Contains(recipeId))
+                {
+                    continue;
+                }
+
+                if (!results.TryAdd(recipeId, difficulty))
+                {
+                    results.Remove(recipeId);
+                    ambiguousRecipeIds.Add(recipeId);
+                    _logger.LogError(
+                        "Complexity batches returned duplicate recipe ID {RecipeId}; the ambiguous result will be unavailable.",
+                        recipeId);
+                }
+            }
+        }
+
+        return results;
+    }
+
+    /// Requests and validates one batch. Provider, transport, and parse failures
+    /// are logged and isolated so other batches can still contribute results.
+    private async Task<ComplexityBatchResult> AnalyzeComplexityBatchAsync(
+        string deployment,
+        ComplexityBatch batch,
+        CancellationToken cancellationToken)
+    {
+        var requestedRecipeIds = batch.Recipes
+            .Select(recipe => recipe.RecipeID)
+            .ToHashSet();
+        var userContent = JsonSerializer.Serialize(new
+        {
+            recipes = batch.Recipes.Select(recipe => new
+            {
+                recipeId = recipe.RecipeID,
+                recipe.Title,
+                ingredients = GetRecipeIngredients(recipe),
+                recipe.ReadyInMinutes,
+                recipe.Servings,
+                instructions = recipe.Instructions is null
+                    ? null
+                    : recipe.Instructions[..Math.Min(
+                        recipe.Instructions.Length,
+                        1200)]
+            })
+        }, JsonOptions);
+
+        // Responses JSON-object mode requires the input message itself to mention
+        // JSON, in addition to the structured format configured below.
+        var options = new CreateResponseOptions
+        {
+            Model = deployment,
+            Instructions = ComplexitySystemPrompt,
+            Temperature = 0.1f,
+            MaxOutputTokenCount = 1000,
+            TextOptions = new ResponseTextOptions
+            {
+                TextFormat = ResponseTextFormat.CreateJsonObjectFormat()
+            }
+        };
+        options.InputItems.Add(ResponseItem.CreateUserMessageItem(
+            $"Classify the preparation complexity for these recipes. Return the classifications as valid JSON matching the required response structure. Do not include Markdown or additional text.\n\n{userContent}"));
+
+        var responseStatus = "NoResponse";
+        var incompleteDetails = "Unavailable";
+        var inputTokens = (int?)null;
+        var outputTokens = (int?)null;
+        var responseTextLength = 0;
+        var parsedResultCount = 0;
+
+        try
+        {
+            var response = await _client.Value.CreateResponseAsync(
+                options,
+                cancellationToken);
+            responseStatus = response.Value.Status.ToString() ?? "Unknown";
+            incompleteDetails =
+                response.Value.IncompleteStatusDetails?.Reason.ToString() ?? "None";
+            inputTokens = response.Value.Usage?.InputTokenCount;
+            outputTokens = response.Value.Usage?.OutputTokenCount;
+
+            var responseText = response.Value.GetOutputText();
+            responseTextLength = responseText.Length;
+            if (response.Value.Status != ResponseStatus.Completed)
+            {
+                LogComplexityBatch(
+                    LogLevel.Warning,
+                    batch,
+                    responseStatus,
+                    incompleteDetails,
+                    inputTokens,
+                    outputTokens,
+                    responseTextLength,
+                    parsedResultCount,
+                    requestedRecipeIds,
+                    new HashSet<int>(),
+                    new HashSet<int>(),
+                    null);
+                return new ComplexityBatchResult(batch.Number, []);
+            }
+
+            var analysis = string.IsNullOrWhiteSpace(responseText)
+                ? null
+                : JsonSerializer.Deserialize<AiRecipeComplexityAnalysis>(
+                    responseText,
+                    JsonOptions);
+            if (analysis?.Recipes is null)
+            {
+                throw new JsonException(
+                    "The response did not contain a recipes array.");
+            }
+
+            var results = new Dictionary<int, string>();
+            var seenRecipeIds = new HashSet<int>();
+            var duplicateRecipeIds = new HashSet<int>();
+            var invalidRecipeIds = new HashSet<int>();
+            var unexpectedRecipeIds = new HashSet<int>();
+            var invalidItemsWithoutRecipeId = 0;
+
+            // Accept only IDs that belong to this batch; duplicates invalidate that
+            // ID, and unsupported difficulty labels are left for caller fallback.
+            foreach (var item in analysis.Recipes)
+            {
+                if (item?.RecipeId is not int recipeId)
+                {
+                    invalidItemsWithoutRecipeId++;
+                    continue;
+                }
+
+                if (!requestedRecipeIds.Contains(recipeId))
+                {
+                    unexpectedRecipeIds.Add(recipeId);
+                    continue;
+                }
+
+                if (!seenRecipeIds.Add(recipeId))
+                {
+                    duplicateRecipeIds.Add(recipeId);
+                    results.Remove(recipeId);
+                    continue;
+                }
+
+                if (!TryNormalizeDifficulty(item.Difficulty, out var difficulty))
+                {
+                    invalidRecipeIds.Add(recipeId);
+                    continue;
+                }
+
+                results.Add(recipeId, difficulty);
+            }
+
+            foreach (var recipeId in duplicateRecipeIds)
+            {
+                results.Remove(recipeId);
+            }
+
+            var missingRecipeIds = requestedRecipeIds
+                .Except(results.Keys)
+                .ToHashSet();
+            parsedResultCount = results.Count;
+
+            LogComplexityBatch(
+                missingRecipeIds.Count == 0 &&
+                unexpectedRecipeIds.Count == 0 &&
+                duplicateRecipeIds.Count == 0 &&
+                invalidRecipeIds.Count == 0 &&
+                invalidItemsWithoutRecipeId == 0
+                    ? LogLevel.Information
+                    : LogLevel.Warning,
+                batch,
+                responseStatus,
+                incompleteDetails,
+                inputTokens,
+                outputTokens,
+                responseTextLength,
+                parsedResultCount,
+                missingRecipeIds,
+                unexpectedRecipeIds,
+                duplicateRecipeIds.Concat(invalidRecipeIds).ToHashSet(),
+                invalidItemsWithoutRecipeId == 0
+                    ? null
+                    : $"{invalidItemsWithoutRecipeId} result item(s) had no valid recipe ID.");
+
+            return new ComplexityBatchResult(batch.Number, results);
+        }
+        catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            responseStatus = exception switch
+            {
+                ClientResultException clientException =>
+                    $"HTTP {(int)clientException.Status}",
+                HttpRequestException { StatusCode: { } statusCode } =>
+                    $"HTTP {(int)statusCode}",
+                _ => responseStatus
+            };
+            LogComplexityBatch(
+                LogLevel.Warning,
+                batch,
+                responseStatus,
+                incompleteDetails,
+                inputTokens,
+                outputTokens,
+                responseTextLength,
+                parsedResultCount,
+                requestedRecipeIds,
+                new HashSet<int>(),
+                new HashSet<int>(),
+                $"{exception.GetType().Name}: {exception.Message}");
+            return new ComplexityBatchResult(batch.Number, []);
+        }
+    }
+
+    /// Records operational metadata for a batch without logging prompts, recipe
+    /// text, or generated response content.
+    private void LogComplexityBatch(
+        LogLevel level,
+        ComplexityBatch batch,
+        string responseStatus,
+        string incompleteDetails,
+        int? inputTokens,
+        int? outputTokens,
+        int responseTextLength,
+        int parsedResultCount,
+        IReadOnlySet<int> missingRecipeIds,
+        IReadOnlySet<int> unexpectedRecipeIds,
+        IReadOnlySet<int> invalidRecipeIds,
+        string? exceptionDetails)
+    {
+        _logger.Log(
+            level,
+            "Recipe complexity batch {BatchNumber} ({RecipeCount} recipes): " +
+            "status={ResponseStatus}, incompleteDetails={IncompleteDetails}, " +
+            "inputTokens={InputTokens}, outputTokens={OutputTokens}, " +
+            "responseTextLength={ResponseTextLength}, parsedResults={ParsedResultCount}, " +
+            "missingRecipeIds={MissingRecipeIds}, unexpectedRecipeIds={UnexpectedRecipeIds}, " +
+            "invalidOrDuplicateRecipeIds={InvalidRecipeIds}, exception={ExceptionDetails}",
+            batch.Number,
+            batch.Recipes.Length,
+            responseStatus,
+            incompleteDetails,
+            inputTokens,
+            outputTokens,
+            responseTextLength,
+            parsedResultCount,
+            string.Join(",", missingRecipeIds.Order()),
+            string.Join(",", unexpectedRecipeIds.Order()),
+            string.Join(",", invalidRecipeIds.Order()),
+            exceptionDetails ?? "None");
+    }
+
+    private sealed record ComplexityBatch(
+        int Number,
+        RecipeSearchResult[] Recipes);
+
+    private sealed record ComplexityBatchResult(
+        int Number,
+        Dictionary<int, string> Results);
+
+    /// Validates the HTTPS endpoint and returns the deployment name.
+    private string GetConfiguredDeployment()
+    {
+        var endpointValue = _configuration["AzureOpenAI:Endpoint"];
+        var deployment = _configuration["AzureOpenAI:Deployment"];
+        if (!Uri.TryCreate(endpointValue, UriKind.Absolute, out var endpoint) ||
+            endpoint.Scheme != Uri.UriSchemeHttps ||
+            string.IsNullOrWhiteSpace(deployment))
+        {
+            throw new InvalidOperationException(
+                "Azure AI Foundry endpoint and deployment are not configured.");
+        }
+
+        return deployment;
+    }
+
+    /// Normalizes an accepted model label to the API's canonical casing.
+    private static bool TryNormalizeDifficulty(
+        string? value,
+        out string difficulty)
+    {
+        difficulty = value?.Trim().ToLowerInvariant() switch
+        {
+            "easy" => "Easy",
+            "medium" => "Medium",
+            "hard" => "Hard",
+            _ => string.Empty
+        };
+        return difficulty.Length > 0;
+    }
+
+    /// Optionally researches unclear dish origins. Search failures return no
+    /// findings so structured analysis can use its explicit unknown-origin fallback.
     private async Task<string?> TryResearchOriginsAsync(
         string deployment,
         IReadOnlyCollection<RecipeSearchResult> recipes,
@@ -246,6 +625,8 @@ public sealed class AzureAiRecipeAnalysisService
                 return null;
             }
 
+            // A completed response can still contain a failed search tool call;
+            // do not pass unusable research text to the analysis stage.
             var searchCalls = response.Value.OutputItems
                 .OfType<WebSearchCallResponseItem>()
                 .ToArray();
@@ -282,6 +663,8 @@ public sealed class AzureAiRecipeAnalysisService
         }
     }
 
+    /// Combines the matching and missing SQL ingredient lists into the complete
+    /// ingredient set available to AI analysis.
     private static string[] GetRecipeIngredients(RecipeSearchResult recipe)
     {
         return recipe.MatchingIngredients
@@ -307,6 +690,8 @@ public sealed class AzureAiRecipeAnalysisService
         };
     }
 
+    /// Rejects incomplete, duplicated, unsupported, or malformed structured output
+    /// before it can be returned to the detail page.
     private static void ValidateAnalysis(
         AiRecipeAnalysis? analysis,
         IReadOnlyCollection<RecipeSearchResult> recipes)
@@ -374,6 +759,7 @@ public sealed class AzureAiRecipeAnalysisService
         }
     }
 
+    /// Checks an allergen label against the supported common-allergen set.
     private static bool IsCommonAllergen(string allergen)
     {
         return allergen.ToLowerInvariant() is

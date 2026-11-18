@@ -1,19 +1,21 @@
-using System.Text.Json;
-using System.ClientModel;
-using Azure.Identity;
 using Microsoft.Extensions.Logging;
 using PantryPal.Api.Models;
 
 namespace PantryPal.Api.Services;
 
+/// Coordinates pantry validation, SQL recipe matching, and lightweight AI
+/// complexity classification for the initial results list.
 public sealed class RecipeRecommendationService
 {
-    private const int MaximumAnalyzedRecipes = 10;
+    // Keep SQL's result limit aligned with the front-page list and batched AI
+    // classifier; full summaries are deliberately excluded from this request.
+    internal const int MaximumRecipeResults = 100;
 
     private readonly IRecipeRecommendationDataSource _recipeService;
     private readonly AzureAiRecipeAnalysisService _aiService;
     private readonly ILogger<RecipeRecommendationService> _logger;
 
+    /// Creates a recommendation coordinator for SQL and AI services.
     public RecipeRecommendationService(
         IRecipeRecommendationDataSource recipeService,
         AzureAiRecipeAnalysisService aiService,
@@ -24,6 +26,11 @@ public sealed class RecipeRecommendationService
         _logger = logger;
     }
 
+    /// Validates pantry IDs, loads up to the configured result limit from SQL, and
+    /// enriches the matches with complexity ratings when AI is available.
+
+    /// A complexity failure does not discard SQL matches; affected recipes are
+    /// returned with an unavailable rating and an explanatory response field.
     public async Task<RecipeRecommendationResponse> GetRecommendationsAsync(
         IReadOnlyCollection<int> ingredientIds,
         CancellationToken cancellationToken = default)
@@ -48,7 +55,7 @@ public sealed class RecipeRecommendationService
             distinctIds,
             Array.Empty<string>(),
             cancellationToken,
-            MaximumAnalyzedRecipes);
+            MaximumRecipeResults);
 
         var result = new RecipeRecommendationResponse
         {
@@ -61,63 +68,49 @@ public sealed class RecipeRecommendationService
             return result;
         }
 
-        AiRecipeAnalysis analysis;
-        Dictionary<int, AiRecipeAnalysisItem> analysesByRecipeId;
+        // Complexity is optional enrichment: keep the SQL results even if Foundry
+        // is unavailable, but let caller cancellation continue to propagate.
+        IReadOnlyDictionary<int, string> complexities =
+            new Dictionary<int, string>();
         try
         {
-            analysis = await _aiService.AnalyzeAsync(
-                selectedIngredients,
+            complexities = await _aiService.AnalyzeComplexitiesAsync(
                 recipes,
                 cancellationToken);
-            analysesByRecipeId = ValidateAndIndexAnalysis(analysis, recipes);
         }
-        catch (Exception ex) when (
-            !cancellationToken.IsCancellationRequested &&
-            IsRecoverableAiFailure(ex))
+        catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
         {
-            if (IsAiTimeout(ex))
+            _logger.LogWarning(
+                ex,
+                "Azure AI recipe complexity analysis failed; SQL matches will still be returned.");
+        }
+
+        var unavailableCount = 0;
+        foreach (var recipe in recipes)
+        {
+            if (complexities.TryGetValue(recipe.RecipeID, out var difficulty))
             {
-                _logger.LogWarning(ex, "Azure AI recipe analysis timed out.");
-                result.AiError =
-                    "AI recommendations timed out. Your database recipe matches are still shown.";
+                recipe.Difficulty = difficulty;
             }
             else
             {
-                _logger.LogError(ex, "Azure AI recipe analysis failed.");
-                result.AiError =
-                    "AI recommendations are unavailable. Your database recipe matches are still shown.";
+                recipe.Difficulty = "Unavailable";
+                unavailableCount++;
             }
-
-            return result;
         }
 
-        foreach (var recipe in recipes)
+        result.ComplexityAvailable = unavailableCount == 0;
+        if (unavailableCount > 0)
         {
-            var item = analysesByRecipeId[recipe.RecipeID];
-            recipe.Overview = item.Overview;
-            recipe.WhyItMatches = item.WhyItMatches;
-            recipe.MatchAssessment = item.MatchAssessment;
-            recipe.Difficulty = item.Difficulty;
-            recipe.RegionOfOrigin = item.RegionOfOrigin;
-            recipe.MealHeaviness = item.MealHeaviness;
-            recipe.MealHeavinessExplanation = item.MealHeavinessExplanation;
-            recipe.PotentialAllergens = item.PotentialAllergens ??
-                throw new JsonException("Azure AI Foundry returned no allergen analysis.");
-            recipe.AllergenAssessment = item.AllergenAssessment;
-            recipe.AllergenExplanations = item.AllergenExplanations ??
-                throw new JsonException("Azure AI Foundry returned no allergen explanations.");
-            recipe.OriginSources = item.OriginSources ??
-                throw new JsonException("Azure AI Foundry returned no origin sources.");
-            recipe.OtherConsiderations = item.OtherConsiderations;
-            recipe.Substitutions = item.Substitutions;
+            result.ComplexityError =
+                $"AI complexity is unavailable for {unavailableCount} of {recipes.Count} recipes. Those recipes are marked Unavailable.";
         }
 
-        result.BestRecipeId = analysis.BestRecipeId;
-        result.Recommendation = analysis.Recommendation;
-        result.AiAvailable = true;
         return result;
     }
 
+    /// Resolves pantry names through SQL, rejects unknown names, then delegates to
+    /// the ID-based recommendation flow.
     public async Task<RecipeRecommendationResponse> GetRecommendationsAsync(
         IReadOnlyCollection<string> ingredientNames,
         CancellationToken cancellationToken = default)
@@ -150,105 +143,4 @@ public sealed class RecipeRecommendationService
         return result;
     }
 
-    private static Dictionary<int, AiRecipeAnalysisItem> ValidateAndIndexAnalysis(
-        AiRecipeAnalysis? analysis,
-        IReadOnlyCollection<RecipeSearchResult> recipes)
-    {
-        var recipeIds = recipes.Select(recipe => recipe.RecipeID).ToHashSet();
-        if (analysis is null ||
-            string.IsNullOrWhiteSpace(analysis.Recommendation) ||
-            analysis.Recipes is null ||
-            analysis.Recipes.Count != recipeIds.Count ||
-            !recipeIds.Contains(analysis.BestRecipeId))
-        {
-            throw new JsonException(
-                "Azure AI Foundry returned an incomplete recipe analysis.");
-        }
-
-        var analysesByRecipeId = new Dictionary<int, AiRecipeAnalysisItem>();
-        foreach (var item in analysis.Recipes)
-        {
-            if (item is null ||
-                !recipeIds.Contains(item.RecipeId) ||
-                !analysesByRecipeId.TryAdd(item.RecipeId, item) ||
-                string.IsNullOrWhiteSpace(item.Overview) ||
-                string.IsNullOrWhiteSpace(item.WhyItMatches) ||
-                string.IsNullOrWhiteSpace(item.MatchAssessment) ||
-                item.Difficulty is not ("Easy" or "Medium" or "Hard") ||
-                string.IsNullOrWhiteSpace(item.RegionOfOrigin) ||
-                item.MealHeaviness is not ("Light" or "Moderate" or "Hearty") ||
-                string.IsNullOrWhiteSpace(item.MealHeavinessExplanation) ||
-                item.PotentialAllergens is null ||
-                item.PotentialAllergens.Any(allergen =>
-                    string.IsNullOrWhiteSpace(allergen) ||
-                    !IsCommonAllergen(allergen)) ||
-                string.IsNullOrWhiteSpace(item.AllergenAssessment) ||
-                item.AllergenExplanations is null ||
-                item.AllergenExplanations.Any(explanation =>
-                    explanation is null ||
-                    !IsCommonAllergen(explanation.Allergen) ||
-                    string.IsNullOrWhiteSpace(explanation.TriggeringIngredient) ||
-                    string.IsNullOrWhiteSpace(explanation.Explanation) ||
-                    explanation.Certainty is not ("Direct" or "Possible")) ||
-                !item.PotentialAllergens.ToHashSet(StringComparer.OrdinalIgnoreCase)
-                    .SetEquals(item.AllergenExplanations.Select(
-                        explanation => explanation.Allergen)) ||
-                string.IsNullOrWhiteSpace(item.OtherConsiderations) ||
-                item.OriginSources is null ||
-                item.OriginSources.Any(source =>
-                    source is null ||
-                    string.IsNullOrWhiteSpace(source.Title) ||
-                    !Uri.TryCreate(source.Url, UriKind.Absolute, out var sourceUri) ||
-                    (sourceUri.Scheme != Uri.UriSchemeHttps &&
-                     sourceUri.Scheme != Uri.UriSchemeHttp)) ||
-                item.Substitutions is null)
-            {
-                throw new JsonException(
-                    "Azure AI Foundry returned an invalid recipe analysis.");
-            }
-        }
-
-        if (!recipeIds.SetEquals(analysesByRecipeId.Keys))
-        {
-            throw new JsonException(
-                "Azure AI Foundry did not analyze exactly the supplied recipes.");
-        }
-
-        return analysesByRecipeId;
-    }
-
-    private static bool IsCommonAllergen(string allergen)
-    {
-        return allergen.ToLowerInvariant() is
-            "milk" or "eggs" or "fish" or "shellfish" or "tree nuts" or
-            "peanuts" or "wheat" or "soy" or "sesame";
-    }
-
-    private static bool IsRecoverableAiFailure(Exception exception)
-    {
-        return exception switch
-        {
-            AggregateException aggregate =>
-                aggregate.InnerExceptions.Count > 0 &&
-                aggregate.InnerExceptions.All(IsRecoverableAiFailure),
-            OperationCanceledException or
-                TimeoutException or
-                HttpRequestException or
-                ClientResultException or
-                AuthenticationFailedException or
-                JsonException => true,
-            _ => false
-        };
-    }
-
-    private static bool IsAiTimeout(Exception exception)
-    {
-        return exception switch
-        {
-            AggregateException aggregate =>
-                aggregate.InnerExceptions.Any(IsAiTimeout),
-            OperationCanceledException or TimeoutException => true,
-            _ => false
-        };
-    }
 }

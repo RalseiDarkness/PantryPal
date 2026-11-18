@@ -5,8 +5,11 @@ using PantryPal.Services;
 
 namespace PantryPal;
 
+/// Configures the MAUI application, platform-specific API address, and services
+/// injected into the app's pages.
 public static class MauiProgram
 {
+    /// Builds and returns the configured MAUI application.
 	public static MauiApp CreateMauiApp()
 	{
 		var builder = MauiApp.CreateBuilder();
@@ -26,6 +29,8 @@ public static class MauiProgram
 			const bool isDebug = false;
 			string? debugApiOverride = null;
 #endif
+			// Keep API host selection centralized so Debug and Release builds use the
+			// same service registrations while targeting different endpoints.
 			var apiBaseAddress = ApiBaseAddressSelector.Select(
 				isDebug,
 				DeviceInfo.Platform.ToString(),

@@ -1,10 +1,16 @@
 namespace PantryPal.Services;
 
+/// Selects the API host for the app's build configuration and runtime platform.
+/// Debug overrides allow local physical-device testing without changing code.
+
 public static class ApiBaseAddressSelector
 {
+    /// Deployed API used by non-Debug builds.
     public const string ReleaseApiBaseAddress =
         "https://pantrypal-api-frgrbrbjcccbh3gn.westus-01.azurewebsites.net/";
 
+    /// Returns the release API, a validated debug override, or the local API address
+    /// appropriate for the platform.
     public static Uri Select(
         bool isDebug,
         string platform,
@@ -37,6 +43,7 @@ public static class ApiBaseAddressSelector
 
     private static Uri ParseBaseAddress(string value)
     {
+        // Require an origin-like base URL so relative API paths resolve predictably.
         if (!Uri.TryCreate(value, UriKind.Absolute, out var address) ||
             (address.Scheme != Uri.UriSchemeHttp &&
              address.Scheme != Uri.UriSchemeHttps) ||

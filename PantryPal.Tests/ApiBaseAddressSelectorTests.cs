@@ -2,6 +2,7 @@ using PantryPal.Services;
 
 namespace PantryPal.Tests;
 
+/// Verifies debug and release API hosts are selected per platform.
 public class ApiBaseAddressSelectorTests
 {
     [Theory]

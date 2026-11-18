@@ -9,9 +9,12 @@ The MAUI app never connects to Azure SQL itself. It calls the deployed PantryPal
    `GET /api/ingredients/search` for ingredient names. Picked items are saved on
    the device in `pantry.json`.
 2. **Find Recipes** (`PageViews/RecipesView`): sends the saved pantry names to
-   `POST /api/recipes/search` and shows the best 20 matches.
-3. **Recipe page** (`PageViews/RecipeDetailView`): tapping a recipe shows what you
-   have, what you still need, the steps and a link to the original recipe.
+   `POST /api/recipes/recommendations`, which returns up to 100 SQL matches and
+   batches an AI complexity rating for the result list.
+3. **Recipe page** (`PageViews/RecipeDetailView`): tapping a recipe initially shows
+   its SQL details, then requests full AI analysis from
+   `POST /api/recipes/{recipeId}/analysis`. Successful full analyses are cached for
+   one hour per recipe and pantry ingredient set.
 
 Release builds use the deployed API. Debug builds use the local API by default:
 Windows and Mac Catalyst use `http://localhost:5222/`, while Android emulators
@@ -28,8 +31,9 @@ profile and waits until it listens on port `5222` before the MAUI target starts.
 This requires the .NET MAUI extension and C# Dev Kit, plus the platform's
 installed MAUI workload and selected debug target.
 
-The API also has `POST /api/recipes/recommendations`, which adds Azure AI
-suggestions. The app doesn't use it right now.
+The SQL search endpoint `POST /api/recipes/search` also returns up to 100 matches
+without AI analysis. Full AI analysis, including optional web research, is deferred
+until a user opens an individual recipe.
 
 ## Local Windows demo
 

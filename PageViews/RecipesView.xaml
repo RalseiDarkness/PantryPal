@@ -13,7 +13,7 @@
         <!-- tabs and page name -->
         <controls:TabHeader PageTitle="Find Recipes" />
 
-        <!-- recipe results, the code behind fills ItemsSource after a search -->
+        <!-- CollectionView virtualizes the potentially 100 SQL matches; code-behind supplies them after a search. -->
         <CollectionView Grid.Row="1" x:Name="RecipeList" SelectionMode="None">
 
             <!-- shown before the first search or when nothing matched -->
@@ -54,6 +54,7 @@
                                     <Label Text="{Binding Title}" Style="{StaticResource ItemTitle}" />
                                     <Label Text="{Binding Summary}" Style="{StaticResource ItemDetail}" />
                                     <Label Text="{Binding MatchText}" Style="{StaticResource ItemDetail}" />
+                                    <!-- Complexity is computed during the initial recommendation request. -->
                                     <Label Text="{Binding Difficulty, StringFormat='Difficulty: {0}'}"
                                            IsVisible="{Binding HasDifficulty}"
                                            Style="{StaticResource ItemDetail}" />

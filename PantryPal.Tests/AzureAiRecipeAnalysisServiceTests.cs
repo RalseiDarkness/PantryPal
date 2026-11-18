@@ -12,6 +12,9 @@ using PantryPal.Api.Services;
 
 namespace PantryPal.Tests;
 
+/// Exercises Foundry request construction and recommendation fallbacks through a
+/// mocked HTTP transport; these tests do not contact Azure.
+
 public class AzureAiRecipeAnalysisServiceTests
 {
     private const string Endpoint =
@@ -143,63 +146,149 @@ public class AzureAiRecipeAnalysisServiceTests
     }
 
     [Fact]
-    public async Task Recommendations_AddsValidatedAnalysisToDatabaseRecipes()
+    public async Task Recommendations_BatchesComplexityWithoutFullAiAnalysis()
     {
-        const string analysisJson = """
+        const string complexityJson = """
             {
-              "bestRecipeId": 42,
-              "recommendation": "Best match for the pantry.",
               "recipes": [
+                { "recipeId": 77, "difficulty": "Medium" },
+                { "recipeId": 42, "difficulty": "Easy" }
+              ]
+            }
+            """;
+        var omelet = CreateRecipe();
+        var pancake = CreateRecipe(77, "Pancakes");
+        var handler = new ResponsesHandler(
+            HttpStatusCode.OK,
+            CreateResponseBody(complexityJson));
+        var recommendationService = new RecipeRecommendationService(
+            new FakeRecipeDataSource([omelet, pancake]),
+            CreateService(handler),
+            NullLogger<RecipeRecommendationService>.Instance);
+
+        var result = await recommendationService.GetRecommendationsAsync([7]);
+
+        Assert.True(result.ComplexityAvailable);
+        Assert.False(result.AiAvailable);
+        Assert.Null(result.BestRecipeId);
+        Assert.Null(result.Recommendation);
+        Assert.Equal([omelet, pancake], result.Recipes);
+        Assert.Equal("Easy", omelet.Difficulty);
+        Assert.Equal("Medium", pancake.Difficulty);
+        Assert.Null(omelet.Overview);
+        Assert.Null(omelet.WhyItMatches);
+        Assert.Single(handler.RequestBodies);
+        using var request = JsonDocument.Parse(handler.RequestBodies[0]);
+        Assert.False(request.RootElement.TryGetProperty("tools", out _));
+        Assert.Equal(
+            "json_object",
+            request.RootElement.GetProperty("text").GetProperty("format")
+                .GetProperty("type").GetString());
+        Assert.Contains(
+            "valid JSON matching the required response structure",
+            request.RootElement.GetProperty("input")[0]
+                .GetProperty("content")[0].GetProperty("text").GetString());
+        Assert.Contains(
+            "JSON",
+            request.RootElement.GetProperty("instructions").GetString());
+        Assert.DoesNotContain("originResearchFindings", handler.RequestBodies[0]);
+        Assert.Contains("Whisk eggs and cook.", handler.RequestBodies[0]);
+    }
+
+    // Checks the 100-result workflow end to end: each ten-item request must map by
+    // recipe ID, and the semaphore must keep active requests to two.
+    [Fact]
+    public async Task Recommendations_ReturnsOneHundredRecipesWithIdMappedComplexity()
+    {
+        var recipes = Enumerable.Range(1, 100)
+            .Select(id => CreateRecipe(id, $"Recipe {id}"))
+            .ToList();
+        var activeRequests = 0;
+        var maximumConcurrentRequests = 0;
+        var dataSource = new FakeRecipeDataSource(recipes);
+        var handler = new ResponsesHandler(
+            HttpStatusCode.OK,
+            complexityResponseFactory: async (request, cancellationToken) =>
+            {
+                var active = Interlocked.Increment(ref activeRequests);
+                int previousMaximum;
+                do
                 {
-                  "recipeId": 77,
-                  "overview": "A fruit pancake.",
-                  "whyItMatches": "It uses a selected fruit.",
-                  "matchAssessment": "It matches the pantry well.",
-                  "difficulty": "Medium",
-                  "regionOfOrigin": "Unknown; cannot be reliably determined.",
-                  "mealHeaviness": "Light",
-                  "mealHeavinessExplanation": "The listed ingredients and preparation are light.",
-                  "potentialAllergens": [],
-                  "allergenAssessment": "Unknown because the supplied ingredient data is incomplete.",
-                  "allergenExplanations": [],
-                  "otherConsiderations": "Unknown whether this recipe meets other dietary needs.",
-                  "originSources": [],
-                  "substitutions": []
-                },
-                {
-                  "recipeId": 42,
-                  "overview": "An egg omelet.",
-                  "whyItMatches": "It uses eggs from the pantry.",
-                  "matchAssessment": "Cheese is missing.",
-                  "difficulty": "Easy",
-                  "regionOfOrigin": "Unknown; cannot be reliably determined.",
-                  "mealHeaviness": "Hearty",
-                  "mealHeavinessExplanation": "The ingredients and preparation make it filling.",
-                  "potentialAllergens": ["eggs", "milk"],
-                  "allergenAssessment": "Eggs and milk are listed; this does not cover unlisted ingredients or cross-contact.",
-                  "allergenExplanations": [
+                    previousMaximum = maximumConcurrentRequests;
+                    if (active <= previousMaximum)
                     {
-                      "allergen": "eggs",
-                      "triggeringIngredient": "eggs",
-                      "explanation": "Eggs are a direct source of this allergen.",
-                      "certainty": "Direct"
-                    },
-                    {
-                      "allergen": "milk",
-                      "triggeringIngredient": "cheese",
-                      "explanation": "Cheese is made from milk.",
-                      "certainty": "Direct"
+                        break;
                     }
-                  ],
-                  "otherConsiderations": "Vegetarian suitability cannot be determined from the available instructions.",
-                  "originSources": [
-                    {
-                      "title": "Culinary History Society",
-                      "url": "https://example.org/omelet-history"
-                    }
-                  ],
-                  "substitutions": ["Use another listed cheese."]
                 }
+                while (Interlocked.CompareExchange(
+                    ref maximumConcurrentRequests,
+                    active,
+                    previousMaximum) != previousMaximum);
+
+                try
+                {
+                    await Task.Delay(20, cancellationToken);
+                    return new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = new StringContent(
+                            CreateResponseBody(CreateComplexityJson(
+                                request,
+                                id => (id % 3) switch
+                                {
+                                    0 => "Hard",
+                                    1 => "Easy",
+                                    _ => "Medium"
+                                })),
+                            Encoding.UTF8,
+                            "application/json")
+                    };
+                }
+                finally
+                {
+                    Interlocked.Decrement(ref activeRequests);
+                }
+            });
+        var recommendationService = new RecipeRecommendationService(
+            dataSource,
+            CreateService(handler),
+            NullLogger<RecipeRecommendationService>.Instance);
+
+        var result = await recommendationService.GetRecommendationsAsync([7]);
+
+        Assert.Equal(100, result.Recipes.Count);
+        Assert.Equal(100, dataSource.MaximumResults);
+        Assert.Equal("Easy", result.Recipes.Single(recipe =>
+            recipe.RecipeID == 1).Difficulty);
+        Assert.Equal("Medium", result.Recipes.Single(recipe =>
+            recipe.RecipeID == 2).Difficulty);
+        Assert.Equal("Hard", result.Recipes.Single(recipe =>
+            recipe.RecipeID == 3).Difficulty);
+        Assert.Equal(10, handler.RequestBodies.Count);
+        Assert.Equal(2, maximumConcurrentRequests);
+        Assert.All(handler.RequestBodies, requestBody =>
+        {
+            using var request = JsonDocument.Parse(requestBody);
+            Assert.False(request.RootElement.TryGetProperty("tools", out _));
+            Assert.Equal(
+                "json_object",
+                request.RootElement.GetProperty("text").GetProperty("format")
+                    .GetProperty("type").GetString());
+            Assert.InRange(
+                GetRequestedRecipeIds(request.RootElement).Length,
+                1,
+                10);
+        });
+    }
+
+    [Fact]
+    public async Task Recommendations_MarksMissingOrInvalidComplexityUnavailable()
+    {
+        const string partialJson = """
+            {
+              "recipes": [
+                { "recipeId": 42, "difficulty": "Easy" },
+                { "recipeId": 77, "difficulty": "Expert" },
+                { "recipeId": 999, "difficulty": "Hard" }
               ]
             }
             """;
@@ -209,36 +298,130 @@ public class AzureAiRecipeAnalysisServiceTests
             new FakeRecipeDataSource([omelet, pancake]),
             CreateService(new ResponsesHandler(
                 HttpStatusCode.OK,
-                CreateResponseBody(analysisJson))),
+                CreateResponseBody(partialJson))),
             NullLogger<RecipeRecommendationService>.Instance);
 
         var result = await recommendationService.GetRecommendationsAsync([7]);
 
-        Assert.True(result.AiAvailable);
-        Assert.Equal(42, result.BestRecipeId);
-        Assert.Equal("Best match for the pantry.", result.Recommendation);
-        Assert.Equal([omelet, pancake], result.Recipes);
-        Assert.Equal("An egg omelet.", omelet.Overview);
-        Assert.Equal("It uses eggs from the pantry.", omelet.WhyItMatches);
-        Assert.Equal("Cheese is missing.", omelet.MatchAssessment);
-        Assert.Equal("Use another listed cheese.", Assert.Single(omelet.Substitutions));
-        Assert.Equal("Unknown; cannot be reliably determined.", omelet.RegionOfOrigin);
-        Assert.Equal("Hearty", omelet.MealHeaviness);
-        Assert.Equal(["eggs", "milk"], omelet.PotentialAllergens);
-        Assert.Equal(2, omelet.AllergenExplanations.Count);
-        Assert.Equal("cheese", omelet.AllergenExplanations[1].TriggeringIngredient);
-        Assert.Equal("Direct", omelet.AllergenExplanations[1].Certainty);
-        var originSource = Assert.Single(omelet.OriginSources);
-        Assert.Equal("Culinary History Society", originSource.Title);
-        Assert.Equal("https://example.org/omelet-history", originSource.Url);
-        Assert.Equal(
-            "Eggs and milk are listed; this does not cover unlisted ingredients or cross-contact.",
-            omelet.AllergenAssessment);
-        Assert.Equal(
-            "Vegetarian suitability cannot be determined from the available instructions.",
-            omelet.OtherConsiderations);
-        Assert.Equal("A fruit pancake.", pancake.Overview);
-        Assert.Equal("It uses a selected fruit.", pancake.WhyItMatches);
+        Assert.False(result.ComplexityAvailable);
+        Assert.Contains("1 of 2 recipes", result.ComplexityError);
+        Assert.Equal("Easy", omelet.Difficulty);
+        Assert.Equal("Unavailable", pancake.Difficulty);
+    }
+
+    // A provider failure for one batch must not erase classifications from the
+    // other batches or suppress the SQL matches.
+    [Fact]
+    public async Task Recommendations_PreservesSuccessfulBatchesWhenOneBatchFails()
+    {
+        var recipes = Enumerable.Range(1, 25)
+            .Select(id => CreateRecipe(id, $"Recipe {id}"))
+            .ToList();
+        var handler = new ResponsesHandler(
+            HttpStatusCode.OK,
+            complexityResponseFactory: (request, _) =>
+            {
+                var recipeIds = GetRequestedRecipeIds(request);
+                if (recipeIds[0] == 11)
+                {
+                    return Task.FromResult(new HttpResponseMessage(
+                        HttpStatusCode.ServiceUnavailable)
+                    {
+                        Content = new StringContent("{}")
+                    });
+                }
+
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(
+                        CreateResponseBody(CreateComplexityJson(
+                            request,
+                            _ => "Medium")),
+                        Encoding.UTF8,
+                        "application/json")
+                });
+            });
+        var recommendationService = new RecipeRecommendationService(
+            new FakeRecipeDataSource(recipes),
+            CreateService(handler),
+            NullLogger<RecipeRecommendationService>.Instance);
+
+        var result = await recommendationService.GetRecommendationsAsync([7]);
+
+        Assert.False(result.ComplexityAvailable);
+        Assert.Contains("10 of 25 recipes", result.ComplexityError);
+        Assert.Equal(3, handler.RequestBodies
+            .Select(body =>
+            {
+                using var request = JsonDocument.Parse(body);
+                return string.Join(",", GetRequestedRecipeIds(request.RootElement));
+            })
+            .Distinct()
+            .Count());
+        Assert.All(recipes.Take(10), recipe => Assert.Equal("Medium", recipe.Difficulty));
+        Assert.All(recipes.Skip(10).Take(10), recipe => Assert.Equal("Unavailable", recipe.Difficulty));
+        Assert.All(recipes.Skip(20), recipe => Assert.Equal("Medium", recipe.Difficulty));
+    }
+
+    [Fact]
+    public async Task Recommendations_ReturnsSqlResultsWhenEveryComplexityBatchFails()
+    {
+        var recipes = Enumerable.Range(1, 12)
+            .Select(id => CreateRecipe(id, $"Recipe {id}"))
+            .ToList();
+        var handler = new ResponsesHandler(
+            HttpStatusCode.OK,
+            complexityResponseFactory: (_, _) =>
+                Task.FromException<HttpResponseMessage>(
+                    new HttpRequestException("Provider unavailable.")));
+        var recommendationService = new RecipeRecommendationService(
+            new FakeRecipeDataSource(recipes),
+            CreateService(handler),
+            NullLogger<RecipeRecommendationService>.Instance);
+
+        var result = await recommendationService.GetRecommendationsAsync([7]);
+
+        Assert.Equal(12, result.Recipes.Count);
+        Assert.False(result.ComplexityAvailable);
+        Assert.Contains("12 of 12 recipes", result.ComplexityError);
+        Assert.All(result.Recipes, recipe => Assert.Equal("Unavailable", recipe.Difficulty));
+        Assert.Equal(2, handler.RequestBodies
+            .Select(body =>
+            {
+                using var request = JsonDocument.Parse(body);
+                return string.Join(",", GetRequestedRecipeIds(request.RootElement));
+            })
+            .Distinct()
+            .Count());
+    }
+
+    [Fact]
+    public async Task Recommendations_RejectsDuplicateUnexpectedAndInvalidIdsWithinBatch()
+    {
+        const string modelOutput = """
+            {
+              "recipes": [
+                { "recipeId": 42, "difficulty": "Easy" },
+                { "recipeId": 42, "difficulty": "Hard" },
+                { "recipeId": 77, "difficulty": "Expert" },
+                { "recipeId": 999, "difficulty": "Medium" }
+              ]
+            }
+            """;
+        var omelet = CreateRecipe();
+        var pancake = CreateRecipe(77, "Pancakes");
+        var recommendationService = new RecipeRecommendationService(
+            new FakeRecipeDataSource([omelet, pancake]),
+            CreateService(new ResponsesHandler(
+                HttpStatusCode.OK,
+                CreateResponseBody(modelOutput))),
+            NullLogger<RecipeRecommendationService>.Instance);
+
+        var result = await recommendationService.GetRecommendationsAsync([7]);
+
+        Assert.False(result.ComplexityAvailable);
+        Assert.Equal("Unavailable", omelet.Difficulty);
+        Assert.Equal("Unavailable", pancake.Difficulty);
     }
 
     [Theory]
@@ -359,7 +542,7 @@ public class AzureAiRecipeAnalysisServiceTests
     }
 
     [Fact]
-    public async Task Recommendations_ReturnDatabaseResultsWhenAnalysisFails()
+    public async Task Recommendations_FallsBackWhenComplexityRequestFails()
     {
         var handler = new ResponsesHandler(
             HttpStatusCode.ServiceUnavailable,
@@ -374,118 +557,11 @@ public class AzureAiRecipeAnalysisServiceTests
         var result = await recommendationService.GetRecommendationsAsync([7]);
 
         Assert.Same(databaseResult, Assert.Single(result.Recipes));
-        Assert.False(result.AiAvailable);
-        Assert.False(string.IsNullOrEmpty(result.AiError));
-        Assert.Equal(10, dataSource.MaximumResults);
+        Assert.False(result.ComplexityAvailable);
+        Assert.False(string.IsNullOrEmpty(result.ComplexityError));
+        Assert.Equal("Unavailable", databaseResult.Difficulty);
+        Assert.Equal(100, dataSource.MaximumResults);
         Assert.Equal([7], dataSource.ReceivedIngredientIds);
-    }
-
-    [Fact]
-    public async Task Recommendations_ContinueAnalysisWhenOriginResearchRequestFails()
-    {
-        const string analysisJson = """
-            {
-              "bestRecipeId": 42,
-              "recommendation": "A suitable recipe match.",
-              "recipes": [{
-                "recipeId": 42,
-                "overview": "An egg omelet.",
-                "whyItMatches": "It uses eggs.",
-                "matchAssessment": "Cheese is missing.",
-                "difficulty": "Easy",
-                "regionOfOrigin": "Unknown; research was unavailable.",
-                "mealHeaviness": "Moderate",
-                "mealHeavinessExplanation": "Based on the ingredients and preparation.",
-                "potentialAllergens": ["eggs"],
-                "allergenAssessment": "Eggs are listed. Cross-contamination and manufacturing traces cannot be determined from recipe data.",
-                "allergenExplanations": [{
-                  "allergen": "eggs",
-                  "triggeringIngredient": "eggs",
-                  "explanation": "Eggs are a direct source of this allergen.",
-                  "certainty": "Direct"
-                }],
-                "otherConsiderations": "Unknown.",
-                "originSources": [],
-                "substitutions": []
-              }]
-            }
-            """;
-        var databaseResult = CreateRecipe();
-        var handler = new ResponsesHandler(
-            HttpStatusCode.OK,
-            CreateResponseBody(analysisJson),
-            researchStatusCode: HttpStatusCode.ServiceUnavailable,
-            researchResponseBody:
-                """{"error":{"message":"Search unavailable","type":"server_error"}}""");
-        var recommendationService = new RecipeRecommendationService(
-            new FakeRecipeDataSource([databaseResult]),
-            CreateService(handler),
-            NullLogger<RecipeRecommendationService>.Instance);
-
-        var result = await recommendationService.GetRecommendationsAsync([7]);
-
-        Assert.True(result.AiAvailable);
-        Assert.Single(result.Recipes);
-        Assert.True(handler.RequestBodies.Count >= 2);
-        using var analysisRequest = JsonDocument.Parse(handler.RequestBodies[^1]);
-        Assert.False(analysisRequest.RootElement.TryGetProperty("tools", out _));
-        Assert.Contains(
-            "Origin research was unavailable",
-            handler.RequestBodies[^1]);
-    }
-
-    [Fact]
-    public async Task Recommendations_KeepSqlMatchesWhenWebSearchCallFails()
-    {
-        const string analysisJson = """
-            {
-              "bestRecipeId": 42,
-              "recommendation": "A suitable recipe match.",
-              "recipes": [{
-                "recipeId": 42,
-                "overview": "An egg omelet.",
-                "whyItMatches": "It uses eggs.",
-                "matchAssessment": "Cheese is missing.",
-                "difficulty": "Easy",
-                "regionOfOrigin": "Unknown; credible origin evidence was unavailable.",
-                "mealHeaviness": "Moderate",
-                "mealHeavinessExplanation": "Based on the ingredients and preparation.",
-                "potentialAllergens": ["eggs"],
-                "allergenAssessment": "Eggs are listed. Cross-contamination and manufacturing traces cannot be determined from recipe data.",
-                "allergenExplanations": [{
-                  "allergen": "eggs",
-                  "triggeringIngredient": "eggs",
-                  "explanation": "Eggs are a direct source of this allergen.",
-                  "certainty": "Direct"
-                }],
-                "otherConsiderations": "Unknown.",
-                "originSources": [],
-                "substitutions": []
-              }]
-            }
-            """;
-        var databaseResult = CreateRecipe();
-        var handler = new ResponsesHandler(
-            HttpStatusCode.OK,
-            CreateResponseBody(analysisJson),
-            researchResponseBody: CreateResponseBody(
-                "Origin research could not be completed.",
-                includeWebSearchCall: true,
-                webSearchFailed: true));
-        var recommendationService = new RecipeRecommendationService(
-            new FakeRecipeDataSource([databaseResult]),
-            CreateService(handler),
-            NullLogger<RecipeRecommendationService>.Instance);
-
-        var result = await recommendationService.GetRecommendationsAsync([7]);
-
-        Assert.Same(databaseResult, Assert.Single(result.Recipes));
-        Assert.True(result.AiAvailable);
-        Assert.StartsWith("Unknown", databaseResult.RegionOfOrigin);
-        Assert.Empty(databaseResult.OriginSources);
-        Assert.Contains(
-            "Origin research was unavailable",
-            handler.RequestBodies[1]);
     }
 
     [Fact]
@@ -525,7 +601,7 @@ public class AzureAiRecipeAnalysisServiceTests
     }
 
     [Fact]
-    public async Task Recommendations_ReturnDatabaseResultsWhenAiTimesOut()
+    public async Task Recommendations_ReturnDatabaseResultsWhenComplexityTimesOut()
     {
         var dataSource = new FakeRecipeDataSource([CreateRecipe()]);
         var recommendationService = new RecipeRecommendationService(
@@ -539,22 +615,28 @@ public class AzureAiRecipeAnalysisServiceTests
 
         Assert.Single(result.Recipes);
         Assert.False(result.AiAvailable);
-        Assert.Contains("timed out", result.AiError);
+        Assert.False(result.ComplexityAvailable);
+        Assert.Contains("unavailable", result.ComplexityError);
+        Assert.Equal("Unavailable", Assert.Single(result.Recipes).Difficulty);
     }
 
     [Fact]
-    public async Task Recommendations_PropagatesUnexpectedInvalidOperationException()
+    public async Task Recommendations_ReturnsSqlResultsWhenComplexityAnalysisThrowsUnexpectedException()
     {
+        var recipe = CreateRecipe();
         var recommendationService = new RecipeRecommendationService(
-            new FakeRecipeDataSource([CreateRecipe()]),
+            new FakeRecipeDataSource([recipe]),
             CreateService(new ResponsesHandler(
                 HttpStatusCode.OK,
                 responseException: new InvalidOperationException(
                     "Unexpected analysis failure."))),
             NullLogger<RecipeRecommendationService>.Instance);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            recommendationService.GetRecommendationsAsync([7]));
+        var result = await recommendationService.GetRecommendationsAsync([7]);
+
+        Assert.Same(recipe, Assert.Single(result.Recipes));
+        Assert.False(result.ComplexityAvailable);
+        Assert.Equal("Unavailable", recipe.Difficulty);
     }
 
     [Fact]
@@ -577,6 +659,8 @@ public class AzureAiRecipeAnalysisServiceTests
                 cancellationSource.Token));
     }
 
+    // Inject a token and transport so the OpenAI SDK request can be inspected
+    // without real credentials or an Azure deployment.
     private static AzureAiRecipeAnalysisService CreateService(
         ResponsesHandler handler)
     {
@@ -655,6 +739,35 @@ public class AzureAiRecipeAnalysisServiceTests
         });
     }
 
+    private static string CreateComplexityJson(
+        JsonElement request,
+        Func<int, string> getDifficulty)
+    {
+        return JsonSerializer.Serialize(new
+        {
+            recipes = GetRequestedRecipeIds(request)
+                .Select(recipeId => new
+                {
+                    recipeId,
+                    difficulty = getDifficulty(recipeId)
+                })
+        });
+    }
+
+    private static int[] GetRequestedRecipeIds(JsonElement request)
+    {
+        var inputText = request.GetProperty("input")[0]
+            .GetProperty("content")[0]
+            .GetProperty("text")
+            .GetString()!;
+        var jsonStart = inputText.IndexOf('{', StringComparison.Ordinal);
+        using var recipeInput = JsonDocument.Parse(inputText[jsonStart..]);
+        return recipeInput.RootElement.GetProperty("recipes")
+            .EnumerateArray()
+            .Select(recipe => recipe.GetProperty("recipeId").GetInt32())
+            .ToArray();
+    }
+
     private static RecipeSearchResult CreateRecipe(
         int recipeId = 42,
         string title = "Omelet")
@@ -672,13 +785,16 @@ public class AzureAiRecipeAnalysisServiceTests
         };
     }
 
+    /// Routes mocked Responses API calls to test-configured replies.
     private sealed class ResponsesHandler(
         HttpStatusCode statusCode,
         string responseBody = "",
         Exception? responseException = null,
         HttpStatusCode researchStatusCode = HttpStatusCode.OK,
         string? researchResponseBody = null,
-        Exception? researchResponseException = null) : HttpMessageHandler
+        Exception? researchResponseException = null,
+        Func<JsonElement, CancellationToken, Task<HttpResponseMessage>>?
+            complexityResponseFactory = null) : HttpMessageHandler
     {
         private readonly string _researchResponseBody =
             researchResponseBody ??
@@ -702,10 +818,20 @@ public class AzureAiRecipeAnalysisServiceTests
             RequestBody = request.Content is null
                 ? null
                 : await request.Content.ReadAsStringAsync(cancellationToken);
-            RequestBodies.Add(RequestBody ?? string.Empty);
+            lock (RequestBodies)
+            {
+                RequestBodies.Add(RequestBody ?? string.Empty);
+            }
             using var requestJson = JsonDocument.Parse(RequestBody ?? "{}");
             var isResearchRequest =
                 requestJson.RootElement.TryGetProperty("tools", out _);
+            if (!isResearchRequest && complexityResponseFactory is not null)
+            {
+                return await complexityResponseFactory(
+                    requestJson.RootElement,
+                    cancellationToken);
+            }
+
             var responseError = isResearchRequest
                 ? researchResponseException
                 : responseException;

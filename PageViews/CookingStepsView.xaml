@@ -18,6 +18,7 @@
                 CornerRadius="12"
                 Padding="16,8" />
 
+        <!-- All instruction cards are created from the stored recipe steps, so the complete recipe can scroll as one page. -->
         <ScrollView Grid.Row="1"
                     VerticalScrollBarVisibility="Always">
 

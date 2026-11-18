@@ -3,6 +3,8 @@ using PantryPal.Services;
 
 namespace PantryPal.PageViews;
 
+/// Shows SQL-ranked recipe matches and their lightweight AI complexity ratings,
+/// then opens a selected recipe with its current pantry context.
 public partial class RecipesView : ContentPage
 {
     // reads the same pantry.json the pantry page saves
@@ -15,6 +17,7 @@ public partial class RecipesView : ContentPage
     private List<string> _ingredients = new List<string>();
     private bool _isSearching;
 
+    /// Creates the results page with the shared API client.
     public RecipesView(RecipeApiService apiService)
     {
         api_service = apiService;
@@ -22,6 +25,8 @@ public partial class RecipesView : ContentPage
     }
 
     // runs every time this tab is shown, so ingredients added on the pantry page show up right away
+    /// Refreshes the names from local storage whenever the tab becomes visible,
+    /// so pantry edits are reflected before the next search.
     protected override void OnAppearing()
     {
         base.OnAppearing();
@@ -67,9 +72,11 @@ public partial class RecipesView : ContentPage
 
         try
         {
+            // This endpoint adds only compact difficulty ratings; the detail page
+            // requests the more expensive full analysis after a card is opened.
             RecipeRecommendationResponse result =
                 await api_service.GetRecommendationsAsync(_ingredients);
-            var recipes = result.Recipes.Take(10).ToList();
+            var recipes = result.Recipes;
             RecipeList.ItemsSource = recipes;
 
             if (recipes.Count == 0)
@@ -77,22 +84,16 @@ public partial class RecipesView : ContentPage
                 StatusLabel.Text =
                     "No matching recipes were found. Try adding more pantry ingredients.";
             }
-            else if (result.AiAvailable)
+            else if (result.ComplexityAvailable)
             {
-                var best = recipes.FirstOrDefault(
-                    recipe => recipe.RecipeID == result.BestRecipeId);
-                StatusLabel.Text = result.Recommendation;
-                if (!string.IsNullOrWhiteSpace(result.Recommendation) &&
-                    best is not null)
-                {
-                    StatusLabel.Text += " Best match: " + best.Title + ".";
-                }
+                StatusLabel.Text =
+                    $"Found {recipes.Count} matching recipes. Complexity ratings are AI-generated.";
             }
             else
             {
-                StatusLabel.Text = string.IsNullOrWhiteSpace(result.AiError)
-                    ? "AI recommendations are unavailable. Showing database matches."
-                    : result.AiError;
+                StatusLabel.Text = string.IsNullOrWhiteSpace(result.ComplexityError)
+                    ? "AI complexity is unavailable. Showing database matches."
+                    : result.ComplexityError;
             }
         }
         catch (Exception)
@@ -116,6 +117,9 @@ public partial class RecipesView : ContentPage
         var recipe = (RecipeSearchResult)card.BindingContext;
 
         // PushAsync puts the recipe page on top of this one, its back button takes it off again
-        await Navigation.PushAsync(new RecipeDetailView(recipe));
+        await Navigation.PushAsync(new RecipeDetailView(
+            recipe,
+            api_service,
+            _ingredients.ToList()));
     }
 }

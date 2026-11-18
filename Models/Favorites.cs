@@ -3,6 +3,7 @@ using System.Collections.ObjectModel;
 
 namespace PantryPal.Models;
 
+/// Prototype in-memory favorites collection; persistence is not provided here.
 public class Favorites{
 
     public ObservableCollection<Recipe> RecipesFavorites { get; set; }

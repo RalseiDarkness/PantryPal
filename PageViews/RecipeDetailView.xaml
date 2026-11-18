@@ -30,6 +30,19 @@
                        FontSize="24" LineBreakMode="WordWrap" />
                 <Label Text="{Binding Summary}" Style="{StaticResource ItemDetail}" />
 
+                <!-- SQL-backed details display first; code-behind requests AI analysis on appearance. -->
+                <HorizontalStackLayout x:Name="AnalysisLoading" Spacing="8"
+                                       IsVisible="False">
+                    <ActivityIndicator x:Name="AnalysisActivity"
+                                       Color="{StaticResource PantryOrange}"
+                                       IsRunning="False" />
+                    <Label Text="Generating AI recipe analysis..."
+                           Style="{StaticResource ItemDetail}"
+                           VerticalOptions="Center" />
+                </HorizontalStackLayout>
+                <Label x:Name="AnalysisStatus" Style="{StaticResource ItemDetail}"
+                       IsVisible="False" LineBreakMode="WordWrap" />
+
                 <Label Text="{Binding Overview}" Style="{StaticResource BodyText}"
                        IsVisible="{Binding HasOverview}" />
 
@@ -47,6 +60,7 @@
                        Style="{StaticResource BodyText}"
                        IsVisible="{Binding HasDifficulty}" />
 
+                <!-- Optional AI evidence sections remain hidden when the API has no analysis. -->
                 <Label Text="Region of Origin" Style="{StaticResource SectionTitle}"
                        IsVisible="{Binding HasRegionOfOrigin}" />
                 <Label Text="{Binding RegionOfOrigin}" Style="{StaticResource BodyText}"
@@ -91,7 +105,7 @@
                 <Label Text="{Binding SubstitutionsText}" Style="{StaticResource BodyText}"
                        IsVisible="{Binding HasSubstitutions}" />
                 
-                <!-- Opens recipe step carosuel-->
+                <!-- Opens the complete vertically scrollable instruction list. -->
                 <Button Text="Step-by-step guide" Style="{StaticResource WideButton}"
                         Clicked="OnCookAlongClicked" Margin="0,8,0,0" />
 

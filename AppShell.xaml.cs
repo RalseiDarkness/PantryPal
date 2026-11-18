@@ -3,8 +3,11 @@ using PantryPal.PageViews;
 
 namespace PantryPal;
 
+/// Defines the top-level tab navigation and lazily creates the main pantry and
+/// recipe pages through dependency injection.
 public partial class AppShell : Shell
 {
+	/// Initializes Shell page templates and selects the Welcome tab.
 	public AppShell(IServiceProvider services)
 	{
 		InitializeComponent();

@@ -5,6 +5,8 @@ using PantryPal.Api.Services;
 
 namespace PantryPal.Tests;
 
+/// Tests SQL service input validation and ID normalization without opening a
+/// database connection.
 public class RecipeServiceTests
 {
     [Theory]

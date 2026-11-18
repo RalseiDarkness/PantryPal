@@ -3,6 +3,7 @@ using System.Collections.ObjectModel;
 
 namespace PantryPal.Models;
 
+/// Prototype in-memory recipe collection used by the legacy sample view.
 public class FindRecipes
 {
     public ObservableCollection<Recipe> Recipes { get; set; }

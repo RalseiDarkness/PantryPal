@@ -8,10 +8,11 @@ namespace PantryPal.Services;
 public class RecipeApiService
 {
     // HttpClient sends web requests, one is shared by the whole app
-    // the timeout is long because the database can take about 45 seconds to wake up
-    private static readonly HttpClient Client = new HttpClient { Timeout = TimeSpan.FromSeconds(90) };
+    // Leaves time for the database and the separate AI research and analysis requests.
+    private static readonly HttpClient Client = new HttpClient { Timeout = TimeSpan.FromSeconds(180) };
     private readonly Uri _apiBaseAddress;
 
+    /// Creates the client using the platform-selected API base address.
     public RecipeApiService(Uri apiBaseAddress)
     {
         _apiBaseAddress = apiBaseAddress;
@@ -57,6 +58,8 @@ public class RecipeApiService
         return recipes;
     }
 
+    /// Requests up to 100 SQL matches with lightweight complexity ratings for the
+    /// initial recipe list.
     public async Task<RecipeRecommendationResponse> GetRecommendationsAsync(
         List<string> ingredientNames)
     {
@@ -90,6 +93,48 @@ public class RecipeApiService
         return recommendations ?? new RecipeRecommendationResponse();
     }
 
+    /// Requests full analysis only after a recipe is opened, passing the selected
+    /// pantry names so the API can personalize and cache the result.
+    public async Task<RecipeSearchResult> GetRecipeAnalysisAsync(
+        int recipeId,
+        List<string> ingredientNames)
+    {
+        if (recipeId <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(recipeId));
+        }
+
+        if (ingredientNames.Count == 0)
+        {
+            throw new ArgumentException(
+                "At least one pantry ingredient is required.",
+                nameof(ingredientNames));
+        }
+
+        var url = new Uri(
+            _apiBaseAddress,
+            $"api/recipes/{recipeId}/analysis");
+        var request = new RecipeDetailAnalysisRequest
+        {
+            IngredientNames = ingredientNames
+        };
+        var response = await Client.PostAsJsonAsync(url, request);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var detail = await response.Content.ReadAsStringAsync();
+            throw new HttpRequestException(
+                $"Recipe analysis request failed ({(int)response.StatusCode}): " +
+                detail,
+                null,
+                response.StatusCode);
+        }
+
+        var recipe = await response.Content.ReadFromJsonAsync<RecipeSearchResult>();
+        return recipe ?? throw new InvalidDataException(
+            "The recipe analysis response was empty.");
+    }
+
     // one ingredient from the search, the api also sends ids but only the name is needed
     private class IngredientResult
     {
@@ -105,6 +150,11 @@ public class RecipeApiService
     private class RecommendationRequest
     {
         public List<int>? IngredientIds { get; set; }
+        public List<string> IngredientNames { get; set; } = new();
+    }
+
+    private class RecipeDetailAnalysisRequest
+    {
         public List<string> IngredientNames { get; set; } = new();
     }
 }

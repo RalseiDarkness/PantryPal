@@ -5,8 +5,11 @@ namespace PantryPal.Models;
 
 // one recipe sent back by the api
 // the property names match the api's json, capitals don't matter when it's read
+/// Client-side recipe contract deserialized from PantryPal.Api, including SQL
+/// matches and optional AI fields used by the recipe detail page.
 public class RecipeSearchResult
 {
+    /// <summary>Stable recipe ID used for detail-analysis requests.</summary>
     public int RecipeID { get; set; }
     public string Title { get; set; } = "";
     public string? ImageURL { get; set; }
@@ -19,6 +22,7 @@ public class RecipeSearchResult
     // the steps, the database stores them as html like <ol><li>step</li></ol>
     public string? Instructions { get; set; }
 
+    /// <summary>Counts and percentage used to describe the pantry match.</summary>
     public int MatchingIngredientCount { get; set; }
     public int MissingIngredientCount { get; set; }
     public decimal MatchPercentage { get; set; }
@@ -242,6 +246,10 @@ public class RecipeSearchResult
         public string Certainty { get; set; } = string.Empty;
     }
 
+    /// <summary>
+    /// Converts the database's HTML instruction text into readable individual
+    /// lines for the vertically scrolling cooking page.
+    /// </summary>
     public List<string> GetInstructionSteps()
     {
         if (string.IsNullOrWhiteSpace(Instructions))
@@ -249,6 +257,8 @@ public class RecipeSearchResult
             return [];
         }
 
+        // SQL instructions commonly contain list/paragraph markup. Preserve its
+        // line boundaries before stripping tags, then decode entities for display.
         var text = Regex.Replace(
             Instructions,
             @"<\s*br\b[^>]*>",

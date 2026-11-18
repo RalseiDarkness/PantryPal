@@ -5,8 +5,12 @@ using Microsoft.Data.SqlClient;
 
 namespace PantryPal.Api.Data;
 
+/// Opens Azure SQL connections using the API's Entra ID credential and bounded
+/// retries for transient database failures.
 public class SqlConnectionFactory
 {
+    // Bound token acquisition, retries, and backoff together so a paused or
+    // unavailable database cannot hold an API request open indefinitely.
     private static readonly TimeSpan ConnectionWindow = TimeSpan.FromSeconds(100);
     private static readonly TimeSpan ConnectionAttemptTimeout = TimeSpan.FromSeconds(15);
     private static readonly TimeSpan InitialRetryDelay = TimeSpan.FromSeconds(2);
@@ -21,6 +25,7 @@ public class SqlConnectionFactory
     private const string Database =
         "Sophomore-Project-DB";
 
+    /// Creates a connection factory using the configured identity and logger.
     public SqlConnectionFactory(
         TokenCredential credential,
         ILogger<SqlConnectionFactory> logger)
@@ -29,6 +34,8 @@ public class SqlConnectionFactory
         _logger = logger;
     }
 
+    /// Acquires a SQL access token and opens a connection within the overall
+    /// connection window. The caller owns and must dispose the returned connection.
     public async Task<SqlConnection> CreateConnectionAsync(
         CancellationToken cancellationToken = default)
     {
@@ -46,6 +53,8 @@ public class SqlConnectionFactory
 
             var retryAttempt = 0;
 
+            // Azure SQL may be paused or briefly unavailable. Retry only classified
+            // transient errors, while the linked token bounds the whole operation.
             while (true)
             {
                 connectionTimeout.Token.ThrowIfCancellationRequested();
@@ -141,6 +150,8 @@ public class SqlConnectionFactory
 
     private static TimeSpan GetRetryDelay(int retryAttempt)
     {
+        // Exponential backoff is capped so repeated transient errors cannot leave
+        // a request sleeping longer than the configured maximum delay.
         var seconds = Math.Min(
             InitialRetryDelay.TotalSeconds * Math.Pow(2, retryAttempt),
             MaximumRetryDelay.TotalSeconds);
@@ -150,6 +161,8 @@ public class SqlConnectionFactory
 
     private static bool IsTransient(SqlException exception)
     {
+        // Keep permanent authentication, permission, and configuration failures
+        // visible immediately instead of retrying them as if they were outages.
         return exception.Errors
             .Cast<SqlError>()
             .Any(error => error.Number is
