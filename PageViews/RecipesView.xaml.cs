@@ -92,7 +92,7 @@ public partial class RecipesView : ContentPage
                 {
                     using (StreamWriter writer = new StreamWriter(fs))
                     {
-                        writer.WriteLine("{Binding Title}");
+                        writer.WriteLine(model.Title);
                     }
 
                     model.IsFavorite = true;

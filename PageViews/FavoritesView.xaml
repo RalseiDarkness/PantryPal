@@ -1,19 +1,119 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:models="clr-namespace:PantryPal.Models"
              xmlns:controls="clr-namespace:PantryPal.Controls"
              x:Class="PantryPal.PageViews.FavoritesView"
              Title="Favorites"
              BackgroundColor="{StaticResource PantryBackground}">
 
-    <Grid RowDefinitions="Auto,*">
+    <!-- same layout as the pantry page, row 0 header, row 1 list, row 2 controls at the bottom -->
+    <Grid RowDefinitions="Auto,*,Auto" RowSpacing="16" Padding="24,0,24,20">
 
-        <!-- Tabs and page name -->
+        <!-- tabs and page name -->
         <controls:TabHeader PageTitle="Favorites" />
 
-        <Label Grid.Row="1" Text="Your saved recipes will show up here."
-               TextColor="{StaticResource PantryMutedText}"
-               HorizontalOptions="Center" VerticalOptions="Center" />
+        <!-- recipe results, the code behind fills ItemsSource after a search -->
+        <CollectionView Grid.Row="1" x:Name="RecipeList" SelectionMode="None">
+
+            <!-- shown before the first search or when nothing matched -->
+            <CollectionView.EmptyView>
+                <VerticalStackLayout VerticalOptions="Center" HorizontalOptions="Center" Spacing="4">
+                    <Label Text="No recipes yet" Style="{StaticResource ItemTitle}"
+                           HorizontalOptions="Center" />
+                    <Label Text="Tap Find recipes to search with your pantry." Style="{StaticResource ItemDetail}"
+                           HorizontalOptions="Center" />
+                </VerticalStackLayout>
+            </CollectionView.EmptyView>
+
+            <!-- Makes recipe stay on the same row until 4, then recipe goes to next row -->
+            <CollectionView.ItemsLayout>
+                <GridItemsLayout Orientation="Vertical" 
+                    Span="4"
+                    HorizontalItemSpacing="15"
+                    VerticalItemSpacing="15" />
+            </CollectionView.ItemsLayout>
+
+            <CollectionView.ItemTemplate>
+
+                <!-- x:DataType checks every {Binding} name against Favorites -->
+                <DataTemplate x:DataType="models:Favorites">
+
+                    <!-- Padding adds the gap under each card -->
+                    <Grid Padding="0,0,0,12">
+
+                        <!-- Style of the border -->
+                        <Border
+                        HorizontalOptions="Start"
+                        VerticalOptions="Start"
+                        StrokeThickness="0"
+                        BackgroundColor="white"
+                        StrokeShape="RoundRectangle 25"
+                        Margin="5,5,5,5"
+                        MaximumWidthRequest="450"
+                        MaximumHeightRequest="350">
+
+                        <!-- When recipe clicked, takes you to detailed description of recipe -->
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnRecipeTapped" />
+                        </Border.GestureRecognizers>
+
+                        <Grid RowDefinitions="110, *, *, Auto">
+
+                                <Image Grid.Row="0"
+                                    Source="{Binding ImageURL}"
+                                    Aspect="AspectFill"
+                                    IsVisible="{Binding HasImage}"/>
+
+                                <ImageButton Grid.Row="0"
+                                        HorizontalOptions="End"
+                                        VerticalOptions="Start"
+                                        Source="{Binding FavoriteStar}"
+                                        WidthRequest="15"
+                                        HeightRequest="15"
+                                        Margin="10"
+                                        Clicked="OnFavoriteClicked"/>
+
+                                <Label Grid.Row="1"
+                                        Margin="13, 13, 13, 0"
+                                        Text="{Binding Title}"
+                                        Style="{StaticResource ItemTitle}"
+                                        FontSize="18"
+                                        TextColor="black"
+                                        FontAttributes="Bold"/>
+
+                                <Grid ColumnDefinitions="*, Auto"
+                                    Grid.Row="2">
+                                    <Label Grid.Column="0"
+                                        Margin="13,0,0,0"
+                                        Text="{Binding ReadyInMinutes, StringFormat='{0} minutes'}"
+                                        Style="{StaticResource ItemDetail}"
+                                        FontSize="14"
+                                        TextColor="black" />
+
+                                    <Image Grid.Column="1"
+                                        Margin="0, 0, 10, 0"
+                                        Source="{Binding MatchingImage}"
+                                        WidthRequest="30"
+                                        HeightRequest="30"/>
+
+                                </Grid>
+
+                                <Label Grid.Row="3"
+                                    Margin="13, 0, 13, 10"
+                                    Text="{Binding Servings, StringFormat='Servings: {0}'}"
+                                    Style="{StaticResource ItemDetail}"
+                                    FontSize="14"
+                                    TextColor="black"/>
+                        </Grid>
+
+                        </Border>
+                    </Grid>
+
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+
+        </CollectionView>
     </Grid>
 
 </ContentPage>
