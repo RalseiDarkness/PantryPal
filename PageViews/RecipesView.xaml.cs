@@ -15,7 +15,8 @@ public partial class RecipesView : ContentPage
     // the pantry ingredient names that get searched
     private List<string> _ingredients = new List<string>();
 
-    private readonly string favoritePath = "favorite_list.txt";
+    //name of the text file with titles of favorite recipes
+    private readonly string favoritePath = Path.Combine(FileSystem.AppDataDirectory, "favorite_list.txt");
 
     public RecipesView()
     {

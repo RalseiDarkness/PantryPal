@@ -14,7 +14,7 @@
         <controls:TabHeader PageTitle="Favorites" />
 
         <!-- recipe results, the code behind fills ItemsSource after a search -->
-        <CollectionView Grid.Row="1" x:Name="RecipeList" SelectionMode="None">
+        <CollectionView Grid.Row="1" x:Name="FavoriteList" SelectionMode="None">
 
             <!-- shown before the first search or when nothing matched -->
             <CollectionView.EmptyView>
@@ -37,7 +37,7 @@
             <CollectionView.ItemTemplate>
 
                 <!-- x:DataType checks every {Binding} name against Favorites -->
-                <DataTemplate x:DataType="models:Favorites">
+                <DataTemplate x:DataType="models:RecipeSearchResult">
 
                     <!-- Padding adds the gap under each card -->
                     <Grid Padding="0,0,0,12">
@@ -64,15 +64,6 @@
                                     Source="{Binding ImageURL}"
                                     Aspect="AspectFill"
                                     IsVisible="{Binding HasImage}"/>
-
-                                <ImageButton Grid.Row="0"
-                                        HorizontalOptions="End"
-                                        VerticalOptions="Start"
-                                        Source="{Binding FavoriteStar}"
-                                        WidthRequest="15"
-                                        HeightRequest="15"
-                                        Margin="10"
-                                        Clicked="OnFavoriteClicked"/>
 
                                 <Label Grid.Row="1"
                                         Margin="13, 13, 13, 0"

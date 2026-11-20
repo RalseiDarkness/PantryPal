@@ -53,10 +53,33 @@ public class RecipeApiService
         return recipes;
     }
 
+    // finds recipes that use these specific recipes names, the api gives specific recipe 
+    public async Task<RecipeSearchResult> FindRecipeTitleAsync(string recipeTitle)
+    {
+        string url = ApiAddress + "api/recipes/search";
+
+        // PostAsJsonAsync turns the request into json like { "recipeTitle": "Burrito" } and sends it
+        var request = new RecipeTitleRequest { RecipeTitle = recipeTitle };
+        HttpResponseMessage response = await Client.PostAsJsonAsync(url, request);
+
+        // stops here with an error if the api didn't send back recipe
+        response.EnsureSuccessStatusCode();
+
+        // turns the json reply into a list of RecipeSearchResult object
+        RecipeSearchResult? recipe = await response.Content.ReadFromJsonAsync<RecipeSearchResult>();
+        if (recipe == null) return new RecipeSearchResult();
+        return recipe;
+    }
+
     // one ingredient from the search, the api also sends ids but only the name is needed
     private class IngredientResult
     {
         public string IngredientName { get; set; } = "";
+    }
+
+    private class RecipeTitleRequest
+    {
+        public string RecipeTitle {get; set; } = "";
     }
 
     // what gets sent to the api when searching for recipes
