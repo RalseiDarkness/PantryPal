@@ -61,7 +61,7 @@ public class RecipeApiService
     // finds recipes that use these specific recipes names, the api gives specific recipe 
     public async Task<List<RecipeSearchResult>> FindRecipeTitleAsync()
     {
-        string url = ApiAddress + "api/recipes";
+        var url = new Uri(_apiBaseAddress, "api/recipes");
 
         // ask api to send all recipes in database
         HttpResponseMessage response = await Client.GetAsync(url);
@@ -80,6 +80,7 @@ public class RecipeApiService
         List<RecipeSearchResult>? recipes = await response.Content.ReadFromJsonAsync<List<RecipeSearchResult>>();
         if (recipes == null) return new List<RecipeSearchResult>();
         return recipes;
+    }
     /// Requests up to 100 SQL matches with lightweight complexity ratings for the
     /// initial recipe list.
     public async Task<RecipeRecommendationResponse> GetRecommendationsAsync(

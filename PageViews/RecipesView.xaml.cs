@@ -18,14 +18,14 @@ public partial class RecipesView : ContentPage
     private List<string> _ingredients = new List<string>();
     private bool _isSearching;
 
-    //name of the text file with titles of favorite recipes
-    private readonly string favoritePath = Path.Combine(FileSystem.AppDataDirectory, "favorite_list.txt");
-
-    public RecipesView()
+    public RecipesView(
+        RecipeApiService apiService,
+        FavoriteService favoriteService)
     {
+        InitializeComponent();
+
         api_service = apiService;
         _favoriteService = favoriteService;
-        InitializeComponent();
     }
 
     // runs every time this tab is shown, so ingredients added on the pantry page show up right away
@@ -140,56 +140,14 @@ public partial class RecipesView : ContentPage
         recipe.IsFavorite = !wasFavorite;
         try
         {
-            // gets bool value from binding model and checks it
-            // if not favorite, adds recipe title name to the file
-                if(model.IsFavorite == false)
-                {
-                    using (StreamWriter writer = new StreamWriter(fs))
-                    {
-                        writer.WriteLine(model.Title);
-                        Console.WriteLine(model.Title);
-                    }
-
-                    model.IsFavorite = true;
-                }
-
-                // if favorite, searches for every recipe title that is not one right now, and rewrites file with them
-                else
-                {
-                    List<string> titles = new List<string>();
-
-                    fs.Seek(0, SeekOrigin.Begin);
-
-                    using (StreamReader reader = new StreamReader(fs, leaveOpen: true))
-                    {
-                        string? title = null;
-                        while( (title = reader.ReadLine()) != null)
-                        {
-                            if(title != model.Title)
-                            {
-                                titles.Add(title);
-                            }
-                        }    
-                    }
-
-                    // puts stream cursor position back to the start and wipes whole file
-                    fs.Position = 0;
-                    fs.SetLength(0);
-
-                    // writes back the titles that are not the title deleted
-                    using (StreamWriter writer = new StreamWriter(fs))
-                    {
-                        foreach(string title in titles)
-                        {
-                            writer.WriteLine(title);
-                        }
-                    }
-
-                    Console.WriteLine(model.Title + " is deleted!");
-
-                    // sets recipe as not favorite anymore
-                    model.IsFavorite = false;
-                }
+            if (wasFavorite)
+            {
+                await _favoriteService.RemoveFavoriteAsync(recipe.RecipeID);
+            }
+            else
+            {
+                await _favoriteService.AddFavoriteAsync(recipe);
+            }
         }
         catch (Exception)
         {
