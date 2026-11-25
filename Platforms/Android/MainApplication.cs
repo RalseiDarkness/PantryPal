@@ -3,6 +3,7 @@ using Android.Runtime;
 
 namespace PantryPal;
 
+/// Creates the shared MAUI app when Android starts the process.
 [Application]
 public class MainApplication : MauiApplication
 {

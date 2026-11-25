@@ -7,8 +7,7 @@
              Title="Favorites"
              BackgroundColor="{StaticResource PantryBackground}">
 
-    <!-- same layout as the pantry page, row 0 header, row 1 list, row 2 controls at the bottom -->
-    <Grid RowDefinitions="Auto,*,Auto" RowSpacing="16" Padding="24,0,24,20">
+    <Grid RowDefinitions="Auto,*,Auto" RowSpacing="12" Padding="24,0,24,20">
 
         <!-- tabs and page name -->
         <controls:TabHeader PageTitle="Favorites" />

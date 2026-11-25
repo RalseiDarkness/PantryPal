@@ -1,5 +1,6 @@
 @PantryPal.Api_HostAddress = http://localhost:5222
 @ingredientId = 1
+@recipeId = 42
 
 ### Find ingredients for the autocomplete dropdown
 GET {{PantryPal.Api_HostAddress}}/api/ingredients/search?query=tom
@@ -7,13 +8,23 @@ Accept: application/json
 
 ###
 
-### Find recipes and request AI recommendations
+### Find up to 100 recipes and request batched complexity ratings
 # Replace with an IngredientID returned by the autocomplete request above.
 POST {{PantryPal.Api_HostAddress}}/api/recipes/recommendations
 Content-Type: application/json
 
 {
   "ingredientIds": [{{ingredientId}}]
+}
+
+###
+
+### Request full AI analysis for one recipe after opening its detail page
+POST {{PantryPal.Api_HostAddress}}/api/recipes/{{recipeId}}/analysis
+Content-Type: application/json
+
+{
+  "ingredientNames": ["eggs", "cheese"]
 }
 
 ###
@@ -33,6 +44,7 @@ Accept: application/json
 
 ###
 
+### SQL-only search without recommendation complexity or detail analysis
 POST {{PantryPal.Api_HostAddress}}/api/recipes/search
 Content-Type: application/json
 
@@ -51,6 +63,7 @@ Content-Type: application/json
 
 ###
 
+### Verify API-to-SQL connectivity and the active Azure identity's permissions
 GET {{PantryPal.Api_HostAddress}}/health/database
 Accept: application/json
 

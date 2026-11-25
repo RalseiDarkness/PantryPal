@@ -10,7 +10,10 @@
 
   <!-- borrows this file from the app, it doesn't use any MAUI code so it works here -->
   <ItemGroup>
+    <ProjectReference Include="../PantryPal.Api/PantryPal.Api.csproj" />
     <Compile Include="../Models/RecipeSearchResult.cs" Link="Models/RecipeSearchResult.cs" />
+    <Compile Include="../Models/RecipeRecommendationResponse.cs" Link="Models/RecipeRecommendationResponse.cs" />
+    <Compile Include="../Services/ApiBaseAddressSelector.cs" Link="Services/ApiBaseAddressSelector.cs" />
   </ItemGroup>
 
   <!-- xunit is the test framework -->

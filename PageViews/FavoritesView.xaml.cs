@@ -4,6 +4,7 @@ using System.IO;
 
 namespace PantryPal.PageViews;
 
+/// Displays saved recipes and opens their existing detail page.
 public partial class FavoritesView : ContentPage
 {
     //name of the text file with titles of favorite recipes
@@ -18,6 +19,8 @@ public partial class FavoritesView : ContentPage
     // sets binding context to specific recipe
     public FavoritesView()
     {
+        _favoriteService = favoriteService;
+        _apiService = apiService;
         InitializeComponent();
         var model = new RecipeSearchResult();
         BindingContext = model;

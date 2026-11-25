@@ -52,6 +52,10 @@
 		<AndroidManifest>Platforms\Android\AndroidManifest.Debug.xml</AndroidManifest>
 	</PropertyGroup>
 
+	<ItemGroup Condition="'$(Configuration)' == 'Debug' and ('$(TargetFramework)' == 'net10.0-maccatalyst' or '$(TargetFramework)' == 'net10.0-ios')">
+		<PartialAppManifest Include="Platforms\Info.Debug.Localhost.plist" />
+	</ItemGroup>
+
 	<ItemGroup>
 		<!-- App Icon -->
 		<MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#512BD4" />

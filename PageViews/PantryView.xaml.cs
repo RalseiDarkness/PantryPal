@@ -4,13 +4,15 @@ using System.Collections.ObjectModel;
 
 namespace PantryPal.PageViews;
 
+/// Lets users maintain a device-local pantry and retrieve SQL-backed ingredient
+/// suggestions while they type.
 public partial class PantryView : ContentPage
 {
     // saves and loads pantry.json on this device
     private readonly PantryService pantry_service = new();
 
     // asks api for ingredient names from the database
-    private readonly RecipeApiService _api = new();
+    private readonly RecipeApiService _api;
 
     // the items on screen
     private readonly ObservableCollection<PantryItem> _items;
@@ -20,8 +22,10 @@ public partial class PantryView : ContentPage
     private int _searchNumber = 0;
 
     // constructor, runs once when first opened
-    public PantryView()
+    ///Loads the local pantry and connects the API used for autocomplete.
+    public PantryView(RecipeApiService api)
     {
+        _api = api;
         InitializeComponent();
         _items = new ObservableCollection<PantryItem>(pantry_service.Load()); // loads the saved items
         PantryList.ItemsSource = _items; // connects the list to the screen list

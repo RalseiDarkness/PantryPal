@@ -1,16 +1,22 @@
-﻿using Microsoft.Extensions.DependencyInjection;
-
+﻿
+using Microsoft.Extensions.DependencyInjection;
 namespace PantryPal;
 
+// Root MAUI application that creates the app window with its Shell.
 public partial class App : Application
 {
-	public App()
-	{
-		InitializeComponent();
-	}
+    private readonly AppShell _appShell;
 
-	protected override Window CreateWindow(IActivationState? activationState)
-	{
-		return new Window(new AppShell());
-	}
+    // Receives the shared Shell instance from dependency injection.
+    public App(AppShell appShell)
+    {
+        InitializeComponent();
+        _appShell = appShell;
+    }
+
+    // Creates the single window that hosts the app's tab navigation.
+    protected override Window CreateWindow(IActivationState? activationState)
+    {
+        return new Window(_appShell);
+    }
 }

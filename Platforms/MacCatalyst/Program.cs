@@ -3,6 +3,7 @@ using UIKit;
 
 namespace PantryPal;
 
+/// Native Mac Catalyst entry point that starts the MAUI AppDelegate.
 public class Program
 {
 	// This is the main entry point of the application.

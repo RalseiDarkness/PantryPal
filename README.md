@@ -9,49 +9,67 @@ The MAUI app never connects to Azure SQL itself. It calls the deployed PantryPal
    `GET /api/ingredients/search` for ingredient names. Picked items are saved on
    the device in `pantry.json`.
 2. **Find Recipes** (`PageViews/RecipesView`): sends the saved pantry names to
-   `POST /api/recipes/search` and shows the best 20 matches.
-3. **Recipe page** (`PageViews/RecipeDetailView`): tapping a recipe shows what you
-   have, what you still need, the steps and a link to the original recipe.
+   `POST /api/recipes/recommendations`, which returns up to 100 SQL matches and
+   batches an AI complexity rating for the result list.
+3. **Recipe page** (`PageViews/RecipeDetailView`): tapping a recipe initially shows
+   its SQL details, then requests full AI analysis from
+   `POST /api/recipes/{recipeId}/analysis`. Successful full analyses are cached for
+   one hour per recipe and pantry ingredient set.
 
-Every build of the app (Debug and Release) uses the deployed API, so it works for
-the whole team without Azure access. To test API changes locally, run the API and
-change `ApiAddress` in `RecipeApiService.cs` to `http://localhost:5222/`.
+Release builds use the deployed API. Debug builds use the local API by default:
+Windows and Mac Catalyst use `http://localhost:5222/`, while Android emulators
+use `http://10.0.2.2:5222/` and iOS simulators use `http://localhost:5222/`.
+Set `PANTRYPAL_API_BASE_URL` in the Debug app process to override its address.
+For physical devices, use a reachable LAN address or the deployed API; mobile
+launch configurations for passing a device-specific override are not included
+in this phase. The API service is registered through MAUI dependency injection;
+API URLs are selected centrally.
 
-The API also has `POST /api/recipes/recommendations`, which adds Azure AI
-suggestions. The app doesn't use it right now.
+On Windows or macOS, select the matching PantryPal desktop configuration in
+VS Code and press F5. The pre-launch task starts the API with its `http` launch
+profile and waits until it listens on port `5222` before the MAUI target starts.
+This requires the .NET MAUI extension and C# Dev Kit, plus the platform's
+installed MAUI workload and selected debug target.
+
+The SQL search endpoint `POST /api/recipes/search` also returns up to 100 matches
+without AI analysis. Full AI analysis, including optional web research, is deferred
+until a user opens an individual recipe.
 
 ## Local Windows demo
 
 Install the .NET 10 SDK and MAUI workload on Windows (Visual Studio with the
-.NET MAUI workload and Windows App SDK is recommended). Start the API and the
-MAUI app as separate processes.
+.NET MAUI workload and Windows App SDK is recommended). For VS Code, install
+the .NET MAUI extension and configure its Windows debug target.
 
 1. Ensure the Azure SQL firewall allows the demo machine and that the signed-in
-   Azure identity can read the existing database tables. The API uses
-   `DefaultAzureCredential`; run `az login` locally if using Azure CLI auth.
-2. Configure the Azure OpenAI-compatible GPT-4o deployment in the API process:
+   Azure CLI identity can read the existing database tables. The API uses
+   `AzureCliCredential` in Development, so run `az login` before starting it.
+   In production, the API uses its managed identity.
+2. The Foundry project endpoint and GPT-4o deployment are configured under
+   `AzureOpenAI` in `PantryPal.Api/appsettings.json`. Environment variables can
+   override these values for local development:
 
    ```powershell
-   $env:AzureOpenAI__Endpoint = "https://<your-resource>.openai.azure.com/"
-   $env:AzureOpenAI__Deployment = "<your-gpt-4o-deployment-name>"
-   $env:AzureOpenAI__ApiVersion = "2024-10-21"
+   $env:AzureOpenAI__Endpoint = "https://SophomoreProject-AI.services.ai.azure.com/openai/v1"
+   $env:AzureOpenAI__Deployment = "gpt-4o"
    ```
 
-   For key authentication, set `AzureOpenAI__ApiKey` in the API process
-   environment. Do not put keys in the MAUI project, source control, or
-   `appsettings.json`. Alternatively, leave the key unset and grant the API's
-   Azure identity the appropriate Azure OpenAI inference role.
-3. Start the API:
+   The API authenticates to Foundry with Microsoft Entra ID using the
+   `https://ai.azure.com/.default` scope. Do not configure an API key. The
+   production managed identity needs the **Cognitive Services OpenAI User**
+   role on the Foundry resource.
+3. To run the API by itself, start it with:
 
    ```powershell
    dotnet run --project .\PantryPal.Api\PantryPal.Api.csproj --launch-profile http
    ```
 
-   Its HTTP launch profile listens on port `5222`. The app uses the deployed API
-   unless `ApiAddress` in `Services/RecipeApiService.cs` is changed to
-   `http://localhost:5222/`.
+   Its HTTP launch profile listens on port `5222`. When using VS Code F5, skip
+   this manual command: the `PantryPal: Windows Desktop` configuration starts
+   the API task automatically.
 4. In Visual Studio, set PantryPal as the startup project and run the Windows
-   Machine target. On Windows, the app can also be built with:
+   Machine target. In VS Code, select the Windows MAUI debug target. The app can
+   also be built with:
 
    ```powershell
    dotnet build .\PantryPal.csproj -f net10.0-windows10.0.19041.0
@@ -78,11 +96,10 @@ the entire token-acquisition/connection process is capped at 100 seconds.
 Permanent credential, permission, and firewall errors are not retried. The API
 returns a service-unavailable response if the connection window expires.
 
-The AI integration uses the Azure OpenAI deployment-style chat-completions
-endpoint (`/openai/deployments/{deployment}/chat/completions`) and JSON-object
-responses. If your Foundry deployment exposes a different endpoint contract,
-adapt the backend service/configuration to that endpoint; the MAUI app never
-connects directly to Foundry.
+The AI integration uses the Azure OpenAI Responses API at the configured
+Foundry project endpoint (`/openai/v1/responses`). The deployment name is sent
+as the Responses API model value. The MAUI app never connects directly to
+Foundry.
 
 ## Verification
 

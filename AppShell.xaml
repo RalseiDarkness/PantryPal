@@ -15,15 +15,15 @@
     <TabBar x:Name="MainTabs">
 
         <Tab Route="favorites" Title="Favorites">
-            <ShellContent ContentTemplate="{DataTemplate views:FavoritesView}" />
+            <ShellContent x:Name="FavoritesContent" />
         </Tab>
         
-        <Tab Route="recipes" Title="Find Recipes">
-            <ShellContent ContentTemplate="{DataTemplate views:RecipesView}" />
+        <Tab x:Name="RecipesTab" Route="recipes" Title="Find Recipes">
+            <ShellContent x:Name="RecipesContent" />
         </Tab>
         
         <Tab x:Name="PantryTab" Route="pantry" Title="My Pantry">
-            <ShellContent ContentTemplate="{DataTemplate views:PantryView}" />
+            <ShellContent x:Name="PantryContent" />
         </Tab>
         
         <Tab x:Name="HomePage" Route="home" Title="Welcome">

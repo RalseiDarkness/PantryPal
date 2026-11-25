@@ -3,6 +3,7 @@
 namespace PantryPal.Models;
 
 // one ingredient in the pantry, these are what get saved in pantry.json
+/// One pantry entry, including optional shopping details.
 public class PantryItem
 {
     public string Name { get; set; } = "";
