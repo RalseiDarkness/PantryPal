@@ -1,6 +1,5 @@
 using PantryPal.Models;
 using PantryPal.Services;
-using System.IO;
 
 namespace PantryPal.PageViews;
 
@@ -13,17 +12,19 @@ public partial class RecipesView : ContentPage
 
     // asks the api for recipes from the database
     private readonly RecipeApiService api_service;
+    private readonly FavoriteService _favoriteService;
 
     // the pantry ingredient names that get searched
     private List<string> _ingredients = new List<string>();
     private bool _isSearching;
 
-    private readonly string favoritePath = "favorite_list.txt";
-
-    // Creates the results page with the shared API client.
-    public RecipesView(RecipeApiService apiService)
+    // Creates the results page with the shared API and favorites services.
+    public RecipesView(
+        RecipeApiService apiService,
+        FavoriteService favoriteService)
     {
         api_service = apiService;
+        _favoriteService = favoriteService;
         InitializeComponent();
     }
 
@@ -87,16 +88,31 @@ public partial class RecipesView : ContentPage
                 StatusLabel.Text =
                     "No matching recipes were found. Try adding more pantry ingredients.";
             }
-            else if (result.ComplexityAvailable)
-            {
-                StatusLabel.Text =
-                    $"Found {recipes.Count} matching recipes. Complexity ratings are AI-generated.";
-            }
             else
             {
-                StatusLabel.Text = string.IsNullOrWhiteSpace(result.ComplexityError)
-                    ? "AI complexity is unavailable. Showing database matches."
-                    : result.ComplexityError;
+                string searchStatus = result.ComplexityAvailable
+                    ? $"Found {recipes.Count} matching recipes. Complexity ratings are AI-generated."
+                    : string.IsNullOrWhiteSpace(result.ComplexityError)
+                        ? "AI complexity is unavailable. Showing database matches."
+                        : result.ComplexityError;
+
+                try
+                {
+                    HashSet<int> favoriteIds = (await _favoriteService.GetFavoritesAsync())
+                        .Select(recipe => recipe.RecipeID)
+                        .ToHashSet();
+                    foreach (RecipeSearchResult recipe in recipes)
+                    {
+                        recipe.IsFavorite = favoriteIds.Contains(recipe.RecipeID);
+                    }
+
+                    StatusLabel.Text = searchStatus;
+                }
+                catch (Exception)
+                {
+                    StatusLabel.Text =
+                        $"{searchStatus} Saved favorites couldn't be loaded.";
+                }
             }
         }
         catch (Exception)
@@ -114,61 +130,30 @@ public partial class RecipesView : ContentPage
 
     private async void OnFavoriteClicked(object? sender, EventArgs e)
     {
-        // create empty filestream
-        // checks if file exists, if not, creats new one
-        // uses "using" so the stream will automatically close after writing in it
-        using (FileStream fs = new FileStream(favoritePath, FileMode.OpenOrCreate, FileAccess.ReadWrite))
+        if (sender is not ImageButton button ||
+            button.BindingContext is not RecipeSearchResult recipe)
         {
-            fs.Seek(0, SeekOrigin.End);
-
-        // specifies specific collection view object
-        if (sender is ImageButton button &&
-            button.BindingContext is RecipeSearchResult model)
-        {
-            // gets bool value from binding model and checks it
-            // if not favorite, adds recipe title name to the file
-                if(model.IsFavorite == false)
-                {
-                    using (StreamWriter writer = new StreamWriter(fs))
-                    {
-                        writer.WriteLine(model.Title);
-                    }
-
-                    model.IsFavorite = true;
-                }
-
-                // if favorite, searches for every recipe title that is not one right now, and rewrites file with them
-                else
-                {
-                    List<string> titles = new List<string>();
-
-                    using (StreamReader reader = new StreamReader(fs, leaveOpen: true))
-                    {
-                        string? title = null;
-                        while( (title = reader.ReadLine()) != null)
-                        {
-                            if(title != model.Title)
-                            {
-                                titles.Add(title);
-                            }
-                        }    
-                    }
-
-                    // puts stream cursor position back to the start and wipes whole file
-                    fs.Position = 0;
-                    fs.SetLength(0);
-
-                    using (StreamWriter writer = new StreamWriter(fs))
-                    {
-                        foreach(string title in titles)
-                        {
-                            writer.WriteLine(title);
-                        }
-                    }
-
-                    model.IsFavorite = false;
-                }
+            return;
         }
+
+        bool wasFavorite = recipe.IsFavorite;
+        recipe.IsFavorite = !wasFavorite;
+        try
+        {
+            if (wasFavorite)
+            {
+                await _favoriteService.RemoveFavoriteAsync(recipe.RecipeID);
+            }
+            else
+            {
+                await _favoriteService.AddFavoriteAsync(recipe);
+            }
+
+        }
+        catch (Exception)
+        {
+            recipe.IsFavorite = wasFavorite;
+            StatusLabel.Text = "Couldn't update favorites. Please try again.";
         }
     }
 

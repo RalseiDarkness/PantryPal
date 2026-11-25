@@ -15,7 +15,7 @@
     <TabBar x:Name="MainTabs">
 
         <Tab Route="favorites" Title="Favorites">
-            <ShellContent ContentTemplate="{DataTemplate views:FavoritesView}" />
+            <ShellContent x:Name="FavoritesContent" />
         </Tab>
         
         <Tab x:Name="RecipesTab" Route="recipes" Title="Find Recipes">

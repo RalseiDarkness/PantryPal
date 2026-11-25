@@ -36,8 +36,10 @@ public static class MauiProgram
 				DeviceInfo.Platform.ToString(),
 				debugApiOverride);
 			builder.Services.AddSingleton(_ => new RecipeApiService(apiBaseAddress));
+			builder.Services.AddSingleton<FavoriteService>();
 			builder.Services.AddTransient<PantryView>();
 			builder.Services.AddTransient<RecipesView>();
+			builder.Services.AddTransient<FavoritesView>();
 			builder.Services.AddSingleton<AppShell>();
 
 #if DEBUG

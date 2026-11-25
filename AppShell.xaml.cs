@@ -15,6 +15,8 @@ public partial class AppShell : Shell
 			new DataTemplate(() => services.GetRequiredService<RecipesView>());
 		PantryContent.ContentTemplate =
 			new DataTemplate(() => services.GetRequiredService<PantryView>());
+		FavoritesContent.ContentTemplate =
+			new DataTemplate(() => services.GetRequiredService<FavoritesView>());
 
         // the app opens on HomePage.
         MainTabs.CurrentItem = HomePage;

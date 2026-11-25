@@ -14,7 +14,10 @@
         <controls:TabHeader PageTitle="Find Recipes" />
 
         <!-- CollectionView virtualizes the potentially 100 SQL matches; code-behind supplies them after a search. -->
-        <CollectionView Grid.Row="1" x:Name="RecipeList" SelectionMode="None">
+        <CollectionView Grid.Row="1"
+                x:Name="RecipeList"
+                SelectionMode="None"
+                ItemSizingStrategy="MeasureAllItems">
 
             <!-- shown before the first search or when nothing matched -->
             <CollectionView.EmptyView>
@@ -51,14 +54,14 @@
                         StrokeShape="RoundRectangle 25"
                         Margin="5,5,5,5"
                         MaximumWidthRequest="450"
-                        MaximumHeightRequest="350">
+                        MaximumHeightRequest="450">
 
                         <!-- When recipe clicked, takes you to detailed description of recipe -->
                         <Border.GestureRecognizers>
                             <TapGestureRecognizer Tapped="OnRecipeTapped" />
                         </Border.GestureRecognizers>
 
-                        <Grid RowDefinitions="110, *, *, Auto">
+                        <Grid RowDefinitions="110, Auto, Auto, Auto">
 
                             <Image Grid.Row="0"
                                    Source="{Binding ImageURL}"
@@ -84,10 +87,16 @@
                                        FontAttributes="Bold" />
 
                                 <Label Text="{Binding Summary}"
-                                       Style="{StaticResource ItemDetail}" />
+                                        Style="{StaticResource ItemDetail}"
+                                        LineBreakMode="WordWrap"
+                                        MaxLines="3"
+                                        VerticalOptions="Start" />
 
                                 <Label Text="{Binding MatchText}"
-                                       Style="{StaticResource ItemDetail}" />
+                                        Style="{StaticResource ItemDetail}"
+                                        LineBreakMode="WordWrap"
+                                        MaxLines="3"
+                                        VerticalOptions="Start" />
 
                                 <Label Text="{Binding Difficulty, StringFormat='Difficulty: {0}'}"
                                        IsVisible="{Binding HasDifficulty}"

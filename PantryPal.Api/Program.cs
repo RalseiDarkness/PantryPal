@@ -10,12 +10,14 @@ using PantryPal.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Development uses the developer's Azure CLI sign-in; deployed instances use their
-// managed identity so no Azure credentials are stored in the application.
+// Local development supports multiple authentication providers:
+// Visual Studio on Windows, VS Code on Mac, Azure CLI, etc.
+// Deployed instances use their Azure Managed Identity.
 builder.Services.AddSingleton<TokenCredential>(_ =>
     builder.Environment.IsDevelopment()
-        ? new AzureCliCredential()
-        : new ManagedIdentityCredential(new ManagedIdentityCredentialOptions()));
+        ? new DefaultAzureCredential()
+        : new ManagedIdentityCredential(
+            new ManagedIdentityCredentialOptions()));
 
 // Create the Foundry client only when first requested, after configuration and
 // credentials are available through dependency injection.

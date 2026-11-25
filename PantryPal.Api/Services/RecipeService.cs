@@ -414,10 +414,6 @@ public class RecipeService : IRecipeRecommendationDataSource
                 INNER JOIN RecipeIngredientsByName AS recipeIngredient
                     ON recipeIngredient.RecipeID = mr.RecipeID
                 GROUP BY mr.RecipeID, mr.MatchingIngredientCount
-            ),
-            SelectedIngredientCount AS (
-                SELECT COUNT(*) AS Count
-                FROM SelectedIngredients
             )
             SELECT
                 r.RecipeID,
@@ -433,7 +429,7 @@ public class RecipeService : IRecipeRecommendationDataSource
                     AS MissingIngredientCount,
                 CAST(
                     ric.MatchingIngredientCount * 100.0 /
-                    NULLIF(sic.Count, 0)
+                    NULLIF(ric.TotalIngredientCount, 0)
                     AS decimal(5, 2)
                 ) AS MatchPercentage,
                 (
@@ -463,7 +459,6 @@ public class RecipeService : IRecipeRecommendationDataSource
                     FOR JSON PATH
                 ) AS MissingIngredientsJson
             FROM RecipeIngredientCounts AS ric
-            CROSS JOIN SelectedIngredientCount AS sic
             INNER JOIN Recipes AS r
                 ON r.RecipeID = ric.RecipeID
             ORDER BY

@@ -39,6 +39,12 @@ public partial class RecipeDetailView : ContentPage
         }
 
         _analysisRequested = true;
+        if (_pantryIngredients.Count == 0)
+        {
+            // Saved recipe data remains viewable when analysis has no pantry context.
+            return;
+        }
+
         AnalysisLoading.IsVisible = true;
         AnalysisActivity.IsRunning = true;
         AnalysisStatus.IsVisible = false;
