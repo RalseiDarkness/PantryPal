@@ -54,21 +54,27 @@ public class RecipeApiService
     }
 
     // finds recipes that use these specific recipes names, the api gives specific recipe 
-    public async Task<RecipeSearchResult> FindRecipeTitleAsync(string recipeTitle)
+    public async Task<List<RecipeSearchResult>> FindRecipeTitleAsync()
     {
-        string url = ApiAddress + "api/recipes/search";
+        string url = ApiAddress + "api/recipes";
 
-        // PostAsJsonAsync turns the request into json like { "recipeTitle": "Burrito" } and sends it
-        var request = new RecipeTitleRequest { RecipeTitle = recipeTitle };
-        HttpResponseMessage response = await Client.PostAsJsonAsync(url, request);
+        // ask api to send all recipes in database
+        HttpResponseMessage response = await Client.GetAsync(url);
+
+        if (!response.IsSuccessStatusCode)
+            {
+                string errorBody = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"Failed': {response.StatusCode} - {errorBody}");
+                response.EnsureSuccessStatusCode();
+            }
 
         // stops here with an error if the api didn't send back recipe
         response.EnsureSuccessStatusCode();
 
         // turns the json reply into a list of RecipeSearchResult object
-        RecipeSearchResult? recipe = await response.Content.ReadFromJsonAsync<RecipeSearchResult>();
-        if (recipe == null) return new RecipeSearchResult();
-        return recipe;
+        List<RecipeSearchResult>? recipes = await response.Content.ReadFromJsonAsync<List<RecipeSearchResult>>();
+        if (recipes == null) return new List<RecipeSearchResult>();
+        return recipes;
     }
 
     // one ingredient from the search, the api also sends ids but only the name is needed
@@ -76,12 +82,6 @@ public class RecipeApiService
     {
         public string IngredientName { get; set; } = "";
     }
-
-    private class RecipeTitleRequest
-    {
-        public string RecipeTitle {get; set; } = "";
-    }
-
     // what gets sent to the api when searching for recipes
     private class RecipeRequest
     {

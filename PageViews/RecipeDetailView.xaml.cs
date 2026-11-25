@@ -1,4 +1,5 @@
 using PantryPal.Models;
+using System;
 
 namespace PantryPal.PageViews;
 
@@ -13,6 +14,16 @@ public partial class RecipeDetailView : ContentPage
         InitializeComponent();
         _recipe = recipe;
         BindingContext = recipe; // every {Binding} on this page reads from this recipe
+
+        if(_recipe.MatchingIngredients.Count == 0)
+        {
+            IngredientsMatching.IsVisible = false;
+        }
+
+        if(_recipe.MissingIngredients.Count == 0)
+        {
+            IngredientsMissing.IsVisible = false;
+        }
     }
 
     // PopAsync takes this page off the top and shows the recipes page again

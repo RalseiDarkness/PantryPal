@@ -94,6 +94,7 @@ public partial class RecipesView : ContentPage
                     using (StreamWriter writer = new StreamWriter(fs))
                     {
                         writer.WriteLine(model.Title);
+                        Console.WriteLine(model.Title);
                     }
 
                     model.IsFavorite = true;
@@ -103,6 +104,8 @@ public partial class RecipesView : ContentPage
                 else
                 {
                     List<string> titles = new List<string>();
+
+                    fs.Seek(0, SeekOrigin.Begin);
 
                     using (StreamReader reader = new StreamReader(fs, leaveOpen: true))
                     {
@@ -120,6 +123,7 @@ public partial class RecipesView : ContentPage
                     fs.Position = 0;
                     fs.SetLength(0);
 
+                    // writes back the titles that are not the title deleted
                     using (StreamWriter writer = new StreamWriter(fs))
                     {
                         foreach(string title in titles)
@@ -128,6 +132,9 @@ public partial class RecipesView : ContentPage
                         }
                     }
 
+                    Console.WriteLine(model.Title + " is deleted!");
+
+                    // sets recipe as not favorite anymore
                     model.IsFavorite = false;
                 }
         }

@@ -31,10 +31,10 @@
                 <Label Text="{Binding Summary}" Style="{StaticResource ItemDetail}" />
 
                 <!-- ingredients from the pantry and the ones still needed -->
-                <Label Text="You have" Style="{StaticResource SectionTitle}" />
+                <Label x:Name="IngredientsMatching" Text="You have" Style="{StaticResource SectionTitle}" />
                 <Label Text="{Binding HaveText}" Style="{StaticResource BodyText}" />
 
-                <Label Text="You still need" Style="{StaticResource SectionTitle}" />
+                <Label x:Name="IngredientsMissing" Text="You still need" Style="{StaticResource SectionTitle}" />
                 <Label Text="{Binding NeedText}" Style="{StaticResource BodyText}" />
 
               
