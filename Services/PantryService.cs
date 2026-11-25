@@ -4,12 +4,16 @@ using PantryPal.Models;
 namespace PantryPal.Services;
 
 // saves and loads the pantry list as a json file on this device
+/// Persists pantry items in the app's private local-data directory; only ingredient
+/// names are later sent to the API for recipe matching.
 public class PantryService
 {
     // AppDataDirectory is a private folder the app is allowed to write to
     private readonly string pantry_path = Path.Combine(FileSystem.AppDataDirectory, "pantry.json");
 
     // reads the saved items, gives an empty list if nothing has been saved yet
+    /// Loads the saved pantry. If its JSON is corrupt, preserves the file as a
+    /// backup and starts with an empty list.
     public List<PantryItem> Load()
     {
         if (!File.Exists(pantry_path)) return new List<PantryItem>();

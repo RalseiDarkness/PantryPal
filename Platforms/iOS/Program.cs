@@ -3,6 +3,7 @@ using UIKit;
 
 namespace PantryPal;
 
+/// Native iOS entry point that starts the MAUI AppDelegate.
 public class Program
 {
 	// This is the main entry point of the application.

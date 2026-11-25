@@ -4,26 +4,32 @@ using System.IO;
 
 namespace PantryPal.PageViews;
 
+/// Shows SQL-ranked recipe matches and their lightweight AI complexity ratings,
+/// then opens a selected recipe with its current pantry context.
 public partial class RecipesView : ContentPage
 {
     // reads the same pantry.json the pantry page saves
     private readonly PantryService pantry_service = new();
 
     // asks the api for recipes from the database
-    private readonly RecipeApiService api_service = new();
+    private readonly RecipeApiService api_service;
 
     // the pantry ingredient names that get searched
     private List<string> _ingredients = new List<string>();
+    private bool _isSearching;
 
     private readonly string favoritePath = "favorite_list.txt";
 
-    public RecipesView()
+    // Creates the results page with the shared API client.
+    public RecipesView(RecipeApiService apiService)
     {
+        api_service = apiService;
         InitializeComponent();
-        //OnFindClicked(null, null); // runs the search right away so the user sees something)
     }
 
     // runs every time this tab is shown, so ingredients added on the pantry page show up right away
+    /// Refreshes the names from local storage whenever the tab becomes visible,
+    /// so pantry edits are reflected before the next search.
     protected override void OnAppearing()
     {
         base.OnAppearing();
@@ -49,6 +55,19 @@ public partial class RecipesView : ContentPage
 
     private async void OnFindClicked(object? sender, EventArgs e)
     {
+        if (_isSearching)
+        {
+            return;
+        }
+
+        if (_ingredients.Count == 0)
+        {
+            StatusLabel.Text =
+                "Your pantry is empty. Add ingredients on the My Pantry tab first.";
+            return;
+        }
+
+        _isSearching = true;
         // turns the button off so it can't be pressed twice while searching
         FindButton.IsEnabled = false;
         FindButton.Text = "Searching...";
@@ -56,21 +75,41 @@ public partial class RecipesView : ContentPage
 
         try
         {
-            List<RecipeSearchResult> recipes = await api_service.FindRecipesAsync(_ingredients);
+            // This endpoint adds only compact difficulty ratings; the detail page
+            // requests the more expensive full analysis after a card is opened.
+            RecipeRecommendationResponse result =
+                await api_service.GetRecommendationsAsync(_ingredients);
+            var recipes = result.Recipes;
+            RecipeList.ItemsSource = recipes;
 
-            // the api can send hundreds, Take(20) keeps the first 20, which are the best matches
-            RecipeList.ItemsSource = recipes.Take(20);
-            StatusLabel.Text = "Found " + recipes.Count + " recipes, showing the best ones.";
+            if (recipes.Count == 0)
+            {
+                StatusLabel.Text =
+                    "No matching recipes were found. Try adding more pantry ingredients.";
+            }
+            else if (result.ComplexityAvailable)
+            {
+                StatusLabel.Text =
+                    $"Found {recipes.Count} matching recipes. Complexity ratings are AI-generated.";
+            }
+            else
+            {
+                StatusLabel.Text = string.IsNullOrWhiteSpace(result.ComplexityError)
+                    ? "AI complexity is unavailable. Showing database matches."
+                    : result.ComplexityError;
+            }
         }
         catch (Exception)
         {
-            // no internet, the api is down, or it took too long
-            StatusLabel.Text = "Couldn't reach the recipe database, check your internet and try again.";
+            RecipeList.ItemsSource = null;
+            StatusLabel.Text =
+                "Couldn't reach the recipe service. Check your internet and try again.";
         }
 
         // puts the button back once the search is done
         FindButton.Text = "Find recipes";
         FindButton.IsEnabled = true;
+        _isSearching = false;
     }
 
     private async void OnFavoriteClicked(object? sender, EventArgs e)
@@ -92,7 +131,7 @@ public partial class RecipesView : ContentPage
                 {
                     using (StreamWriter writer = new StreamWriter(fs))
                     {
-                        writer.WriteLine("{Binding Title}");
+                        writer.WriteLine(model.Title);
                     }
 
                     model.IsFavorite = true;
@@ -141,6 +180,9 @@ public partial class RecipesView : ContentPage
         var recipe = (RecipeSearchResult)card.BindingContext;
 
         // PushAsync puts the recipe page on top of this one, its back button takes it off again
-        await Navigation.PushAsync(new RecipeDetailView(recipe));
+        await Navigation.PushAsync(new RecipeDetailView(
+            recipe,
+            api_service,
+            _ingredients.ToList()));
     }
 }

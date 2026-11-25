@@ -1,0 +1,70 @@
+
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "PantryPal: Start API (http)",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "run",
+        "--project",
+        "${workspaceFolder}/PantryPal.Api/PantryPal.Api.csproj",
+        "--launch-profile",
+        "http"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "pantrypal-api",
+        "pattern": {
+          "regexp": "^$"
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".",
+          "endsPattern": "Now listening on: http://0\\.0\\.0\\.0:5222"
+        }
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "focus": false
+      },
+      "runOptions": {
+        "instanceLimit": 1
+      }
+    },
+    {
+      "label": "PantryPal: Launch MAUI (Mac Catalyst)",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "build",
+        "${workspaceFolder}/PantryPal.csproj",
+        "-t:Run",
+        "-f",
+        "net10.0-maccatalyst"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "focus": false
+      }
+    },
+    {
+      "label": "PantryPal: Run Mac + API",
+      "dependsOn": [
+        "PantryPal: Start API (http)",
+        "PantryPal: Launch MAUI (Mac Catalyst)"
+      ],
+      "dependsOrder": "sequence",
+      "problemMatcher": []
+    }
+  ]
+}

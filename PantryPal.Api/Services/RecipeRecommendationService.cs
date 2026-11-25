@@ -1,20 +1,23 @@
-using System.Text.Json;
-using Azure.Identity;
 using Microsoft.Extensions.Logging;
 using PantryPal.Api.Models;
 
 namespace PantryPal.Api.Services;
 
+/// Coordinates pantry validation, SQL recipe matching, and lightweight AI
+/// complexity classification for the initial results list.
 public sealed class RecipeRecommendationService
 {
-    private const int MaximumAnalyzedRecipes = 10;
+    // Keep SQL's result limit aligned with the front-page list and batched AI
+    // classifier; full summaries are deliberately excluded from this request.
+    internal const int MaximumRecipeResults = 100;
 
-    private readonly RecipeService _recipeService;
+    private readonly IRecipeRecommendationDataSource _recipeService;
     private readonly AzureAiRecipeAnalysisService _aiService;
     private readonly ILogger<RecipeRecommendationService> _logger;
 
+    /// Creates a recommendation coordinator for SQL and AI services.
     public RecipeRecommendationService(
-        RecipeService recipeService,
+        IRecipeRecommendationDataSource recipeService,
         AzureAiRecipeAnalysisService aiService,
         ILogger<RecipeRecommendationService> logger)
     {
@@ -23,6 +26,11 @@ public sealed class RecipeRecommendationService
         _logger = logger;
     }
 
+    /// Validates pantry IDs, loads up to the configured result limit from SQL, and
+    /// enriches the matches with complexity ratings when AI is available.
+    ///
+    /// A complexity failure does not discard SQL matches; affected recipes are
+    /// returned with an unavailable rating and an explanatory response field.
     public async Task<RecipeRecommendationResponse> GetRecommendationsAsync(
         IReadOnlyCollection<int> ingredientIds,
         CancellationToken cancellationToken = default)
@@ -47,7 +55,7 @@ public sealed class RecipeRecommendationService
             distinctIds,
             Array.Empty<string>(),
             cancellationToken,
-            MaximumAnalyzedRecipes);
+            MaximumRecipeResults);
 
         var result = new RecipeRecommendationResponse
         {
@@ -60,46 +68,79 @@ public sealed class RecipeRecommendationService
             return result;
         }
 
-        AiRecipeAnalysis analysis;
+        // Complexity is optional enrichment: keep the SQL results even if Foundry
+        // is unavailable, but let caller cancellation continue to propagate.
+        IReadOnlyDictionary<int, string> complexities =
+            new Dictionary<int, string>();
         try
         {
-            analysis = await _aiService.AnalyzeAsync(
-                selectedIngredients,
+            complexities = await _aiService.AnalyzeComplexitiesAsync(
                 recipes,
                 cancellationToken);
         }
-        catch (TaskCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+        catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
         {
-            _logger.LogWarning(ex, "Azure AI recipe analysis timed out.");
-            result.AiError =
-                "AI recommendations timed out. Your database recipe matches are still shown.";
-            return result;
-        }
-        catch (Exception ex) when (
-            ex is HttpRequestException or
-                AuthenticationFailedException or
-                JsonException or
-                InvalidOperationException)
-        {
-            _logger.LogError(ex, "Azure AI recipe analysis failed.");
-            result.AiError =
-                "AI recommendations are unavailable. Your database recipe matches are still shown.";
-            return result;
+            _logger.LogWarning(
+                ex,
+                "Azure AI recipe complexity analysis failed; SQL matches will still be returned.");
         }
 
-        var analysesByRecipeId = analysis.Recipes.ToDictionary(item => item.RecipeId);
+        var unavailableCount = 0;
         foreach (var recipe in recipes)
         {
-            var item = analysesByRecipeId[recipe.RecipeID];
-            recipe.Overview = item.Overview;
-            recipe.WhyItMatches = item.WhyItMatches;
-            recipe.MatchAssessment = item.MatchAssessment;
-            recipe.Substitutions = item.Substitutions;
+            if (complexities.TryGetValue(recipe.RecipeID, out var difficulty))
+            {
+                recipe.Difficulty = difficulty;
+            }
+            else
+            {
+                recipe.Difficulty = "Unavailable";
+                unavailableCount++;
+            }
         }
 
-        result.BestRecipeId = analysis.BestRecipeId;
-        result.Recommendation = analysis.Recommendation;
-        result.AiAvailable = true;
+        result.ComplexityAvailable = unavailableCount == 0;
+        if (unavailableCount > 0)
+        {
+            result.ComplexityError =
+                $"AI complexity is unavailable for {unavailableCount} of {recipes.Count} recipes. Those recipes are marked Unavailable.";
+        }
+
         return result;
     }
+
+    /// Resolves pantry names through SQL, rejects unknown names, then delegates to
+    /// the ID-based recommendation flow.
+    public async Task<RecipeRecommendationResponse> GetRecommendationsAsync(
+        IReadOnlyCollection<string> ingredientNames,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(ingredientNames);
+
+        var resolution = await _recipeService.ResolveIngredientNamesAsync(
+            ingredientNames,
+            cancellationToken);
+
+        if (resolution.UnknownNames.Count > 0)
+        {
+            throw new ArgumentException(
+                "Unknown ingredient names: " +
+                string.Join(", ", resolution.UnknownNames),
+                nameof(ingredientNames));
+        }
+
+        if (resolution.IngredientIds.Count == 0)
+        {
+            throw new ArgumentException(
+                "One or more ingredient names could not be resolved.",
+                nameof(ingredientNames));
+        }
+
+        var result = await GetRecommendationsAsync(
+            resolution.IngredientIds,
+            cancellationToken);
+        result.SelectedIngredients = resolution.ResolvedNames;
+        return result;
+    }
+
 }

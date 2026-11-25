@@ -7,15 +7,66 @@ using PantryPal.Api.Models;
 
 namespace PantryPal.Api.Services;
 
-public class RecipeService
+/// Defines the SQL-backed ingredient resolution and recipe lookup operations used
+/// by the recommendation and detail-analysis services.
+
+public interface IRecipeRecommendationDataSource
+{
+    /// Returns database names for the supplied ingredient IDs.
+    Task<List<string>> GetIngredientNamesAsync(
+        IReadOnlyCollection<int> ingredientIds,
+        CancellationToken cancellationToken = default);
+
+    /// Resolves submitted pantry names to database IDs and reports names that did
+    /// not match, so callers can reject incomplete ingredient context.
+    Task<ResolvedIngredientNames> ResolveIngredientNamesAsync(
+        IReadOnlyCollection<string> ingredientNames,
+        CancellationToken cancellationToken = default);
+
+    /// Returns recipes ranked by pantry overlap, with both matched and missing
+    /// ingredient names populated.
+    Task<List<RecipeSearchResult>> GetMatchingRecipesAsync(
+        IReadOnlyCollection<int> ingredientIds,
+        IReadOnlyCollection<string> ingredientNames,
+        CancellationToken cancellationToken = default,
+        int? maximumResults = null);
+}
+
+/// The result of resolving pantry ingredient names against the database.
+public sealed class ResolvedIngredientNames
+{
+    /// Database IDs associated with the submitted names.
+    public List<int> IngredientIds { get; set; } = [];
+
+    /// Canonical ingredient names returned by SQL.
+    public List<string> ResolvedNames { get; set; } = [];
+
+    /// Submitted names that did not match a database ingredient.
+    public List<string> UnknownNames { get; set; } = [];
+}
+
+/// Performs ingredient and recipe queries against Azure SQL. The MAUI client
+/// communicates through the API and never opens these connections directly.
+public class RecipeService : IRecipeRecommendationDataSource
 {
     private readonly SqlConnectionFactory _sqlFactory;
 
+    /// Creates the data source with the shared SQL connection factory.
     public RecipeService(SqlConnectionFactory sqlFactory)
     {
         _sqlFactory = sqlFactory;
     }
 
+    /// Removes repeated IDs without changing their first-seen order.
+    internal static int[] NormalizeIngredientIds(
+        IReadOnlyCollection<int> ingredientIds)
+    {
+        ArgumentNullException.ThrowIfNull(ingredientIds);
+        return ingredientIds.Distinct().ToArray();
+    }
+
+    /// Finds up to ten matching ingredient names, ranked so exact and prefix
+    /// matches appear before general contains-matches.
     public async Task<List<IngredientSuggestion>> SearchIngredientsAsync(
         string query,
         CancellationToken cancellationToken = default)
@@ -24,6 +75,8 @@ public class RecipeService
         await using var connection =
             await _sqlFactory.CreateConnectionAsync(cancellationToken);
 
+        // Rank exact names and prefixes before contains-matches, then expand a
+        // displayed name to all IDs that share that exact database spelling.
         var escapedQuery = EscapeLikePattern(query.Trim());
         const string sql = """
             WITH MatchingNames AS (
@@ -132,10 +185,12 @@ public class RecipeService
         return suggestions;
     }
 
+    /// Looks up canonical SQL names for a set of ingredient IDs.
     public async Task<List<string>> GetIngredientNamesAsync(
         IReadOnlyCollection<int> ingredientIds,
         CancellationToken cancellationToken = default)
     {
+        var distinctIngredientIds = NormalizeIngredientIds(ingredientIds);
         var names = new List<string>();
         await using var connection =
             await _sqlFactory.CreateConnectionAsync(cancellationToken);
@@ -151,7 +206,7 @@ public class RecipeService
 
         await using var command = new SqlCommand(sql, connection);
         command.Parameters.Add("@IngredientIdsJson", SqlDbType.NVarChar, -1)
-            .Value = JsonSerializer.Serialize(ingredientIds);
+            .Value = JsonSerializer.Serialize(distinctIngredientIds);
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
@@ -162,6 +217,82 @@ public class RecipeService
         return names;
     }
 
+    /// Resolves names case-insensitively and returns unknown submissions separately
+    /// so recommendation callers can provide clear validation feedback.
+    public async Task<ResolvedIngredientNames> ResolveIngredientNamesAsync(
+        IReadOnlyCollection<string> ingredientNames,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(ingredientNames);
+
+        var submittedNames = ingredientNames
+            .Select(name => name.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var result = new ResolvedIngredientNames();
+
+        if (submittedNames.Count == 0)
+        {
+            return result;
+        }
+
+        await using var connection =
+            await _sqlFactory.CreateConnectionAsync(cancellationToken);
+
+        const string sql = """
+            WITH Submitted AS (
+                SELECT
+                    submittedName,
+                    ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS NameOrdinal
+                FROM OPENJSON(@SubmittedNamesJson)
+                WITH (submittedName nvarchar(4000) '$') AS submitted
+            )
+            SELECT
+                submitted.submittedName,
+                submitted.NameOrdinal,
+                i.IngredientID,
+                i.IngredientName
+            FROM Submitted AS submitted
+            LEFT JOIN Ingredients AS i
+                ON i.IngredientName COLLATE Latin1_General_100_CI_AS =
+                    submitted.submittedName COLLATE Latin1_General_100_CI_AS
+            ORDER BY submitted.NameOrdinal, i.IngredientID;
+            """;
+
+        await using var command = new SqlCommand(sql, connection);
+        command.Parameters.Add("@SubmittedNamesJson", SqlDbType.NVarChar, -1)
+            .Value = JsonSerializer.Serialize(submittedNames);
+
+        var resolvedIds = new HashSet<int>();
+        var resolvedNames = new Dictionary<string, string>(
+            StringComparer.OrdinalIgnoreCase);
+        var matchedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var submittedName = reader.GetString(0);
+            if (reader.IsDBNull(2))
+            {
+                continue;
+            }
+
+            matchedNames.Add(submittedName);
+            resolvedIds.Add(reader.GetInt32(2));
+            resolvedNames.TryAdd(
+                submittedName,
+                reader.GetString(3));
+        }
+
+        result.IngredientIds = resolvedIds.ToList();
+        result.ResolvedNames = resolvedNames.Values.ToList();
+        result.UnknownNames = submittedNames
+            .Where(name => !matchedNames.Contains(name))
+            .ToList();
+        return result;
+    }
+
+    /// Loads all recipe rows, newest database additions first.
     public async Task<List<Recipe>> GetAllRecipesAsync(
         CancellationToken cancellationToken = default)
     {
@@ -205,17 +336,30 @@ public class RecipeService
         return recipes;
     }
 
+    /// Matches the selected ingredients against SQL recipe ingredients, calculates
+    /// pantry coverage, and returns matching/missing names in ranking order.
     public async Task<List<RecipeSearchResult>> GetMatchingRecipesAsync(
         IReadOnlyCollection<int> ingredientIds,
         IReadOnlyCollection<string> ingredientNames,
         CancellationToken cancellationToken = default,
         int? maximumResults = null)
     {
+        if (maximumResults is <= 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(maximumResults),
+                maximumResults,
+                "Maximum results must be greater than zero.");
+        }
+
+        var distinctIngredientIds = NormalizeIngredientIds(ingredientIds);
         var recipes = new List<RecipeSearchResult>();
 
         await using var connection =
             await _sqlFactory.CreateConnectionAsync(cancellationToken);
 
+        // Compare recipe ingredients by exact name and byte length, then use
+        // selected-ingredient overlap to rank results and derive missing items.
         const string sql = """
             WITH SelectedIngredientNameRows AS (
                 SELECT i.IngredientName
@@ -331,7 +475,7 @@ public class RecipeService
 
         await using var command = new SqlCommand(sql, connection);
         command.Parameters.Add("@IngredientIdsJson", SqlDbType.NVarChar, -1)
-            .Value = JsonSerializer.Serialize(ingredientIds);
+            .Value = JsonSerializer.Serialize(distinctIngredientIds);
         command.Parameters.Add("@IngredientNamesJson", SqlDbType.NVarChar, -1)
             .Value = JsonSerializer.Serialize(ingredientNames);
 
@@ -371,6 +515,8 @@ public class RecipeService
 
     private static List<string> DeserializeIngredientNames(string json)
     {
+        // The SQL query shapes ingredient names as JSON so matching and missing
+        // lists can be returned with each recipe row.
         return JsonSerializer.Deserialize<List<IngredientNameJson>>(json)?
             .Select(ingredient => ingredient.Name)
             .ToList() ?? [];
@@ -378,6 +524,7 @@ public class RecipeService
 
     private static string EscapeLikePattern(string value)
     {
+        // Escape SQL LIKE metacharacters so user text is searched literally.
         return value
             .Replace("\\", "\\\\", StringComparison.Ordinal)
             .Replace("%", "\\%", StringComparison.Ordinal)

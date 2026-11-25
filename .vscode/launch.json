@@ -1,0 +1,12 @@
+
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "PantryPal: macOS + API",
+      "type": "maui",
+      "request": "launch",
+      "preLaunchTask": "PantryPal: Start API (http)"
+    }
+  ]
+}

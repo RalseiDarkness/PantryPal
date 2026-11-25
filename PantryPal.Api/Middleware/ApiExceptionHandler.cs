@@ -5,15 +5,20 @@ using Microsoft.Data.SqlClient;
 
 namespace PantryPal.Api.Middleware;
 
+/// Converts expected API failures into consistent problem responses while logging
+/// the underlying exception for server-side diagnosis.
 public sealed class ApiExceptionHandler : IExceptionHandler
 {
     private readonly ILogger<ApiExceptionHandler> _logger;
 
+    ///Creates the handler with the API logger.
     public ApiExceptionHandler(ILogger<ApiExceptionHandler> logger)
     {
         _logger = logger;
     }
 
+    /// Maps database and validation exceptions to HTTP status codes and writes
+    /// a Problem Details payload.
     public async ValueTask<bool> TryHandleAsync(
         HttpContext httpContext,
         Exception exception,

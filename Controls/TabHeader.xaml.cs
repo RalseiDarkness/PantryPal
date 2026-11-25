@@ -1,7 +1,11 @@
 namespace PantryPal.Controls;
 
+/// Reusable custom navigation header that highlights the active tab and routes
+/// button taps through Shell.
+
 public partial class TabHeader : ContentView
 {
+    /// Initializes the header's buttons and title label.
     public TabHeader()
     {
         InitializeComponent();
@@ -9,6 +13,8 @@ public partial class TabHeader : ContentView
 
     // Each page sets this in XAML: <controls:TabHeader PageTitle="My Pantry" />
 
+
+    /// Gets or sets the displayed page title; setting it also updates the selected and tab's colors.
     public string PageTitle
     {
         get => TitleLabel.Text;
@@ -29,7 +35,7 @@ public partial class TabHeader : ContentView
     {
         var route = (string)((Button)sender!).CommandParameter;
 
-        // "//" means go to the Tab with this Route in AppShell.xaml
+        // means go to the Tab with this Route in AppShell.xaml
         await Shell.Current.GoToAsync($"//{route}");
     }
 }
