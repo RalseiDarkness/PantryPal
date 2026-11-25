@@ -105,6 +105,12 @@ public class RecipeSearchResult : INotifyPropertyChanged
         {
             int matching = MatchingIngredients.Count;
             int total = MissingIngredients.Count + MatchingIngredients.Count;
+
+            if (total == 0)
+            {
+                return "checkmark.jpg"; // Or whatever default icon you want
+            }
+            
             if(matching/total > 0.8)
             {
                 return "checkmark.jpg";
