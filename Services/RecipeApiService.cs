@@ -82,7 +82,8 @@ public class RecipeApiService
         return recipes;
     }
     /// Requests up to 100 SQL matches with lightweight complexity ratings for the
-    /// initial recipe list.
+    /// initial recipe list. The API resolves pantry names, then returns ranked
+    /// recipes with an optional Easy/Medium/Hard rating for each.
     public async Task<RecipeRecommendationResponse> GetRecommendationsAsync(
         List<string> ingredientNames)
     {

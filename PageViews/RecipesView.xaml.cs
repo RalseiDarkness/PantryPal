@@ -36,6 +36,7 @@ public partial class RecipesView : ContentPage
         base.OnAppearing();
 
         // gets just the name of every saved pantry item
+        // Only ingredient names leave local storage; brand, price, and date stay on the device.
         _ingredients.Clear();
         foreach (PantryItem item in pantry_service.Load())
         {
@@ -78,9 +79,11 @@ public partial class RecipesView : ContentPage
         {
             // This endpoint adds only compact difficulty ratings; the detail page
             // requests the more expensive full analysis after a card is opened.
+            // The API resolves these pantry names, ranks SQL matches, and returns the recipe cards.
             RecipeRecommendationResponse result =
                 await api_service.GetRecommendationsAsync(_ingredients);
             var recipes = result.Recipes;
+            // RecipeList is the CollectionView, so binding the response displays the returned cards.
             RecipeList.ItemsSource = recipes;
 
             if (recipes.Count == 0)
@@ -163,6 +166,7 @@ public partial class RecipesView : ContentPage
         var card = (Border)sender!;
         var recipe = (RecipeSearchResult)card.BindingContext;
 
+        // Keep the pantry snapshot with the selected recipe for its personalized detail analysis.
         // PushAsync puts the recipe page on top of this one, its back button takes it off again
         await Navigation.PushAsync(new RecipeDetailView(
             recipe,

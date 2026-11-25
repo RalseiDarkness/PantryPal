@@ -7,6 +7,7 @@ public class ApiBaseAddressSelectorTests
 {
     [Theory]
     [InlineData("WinUI", "http://localhost:5222/")]
+    [InlineData("Windows", "http://localhost:5222/")]
     [InlineData("MacCatalyst", "http://localhost:5222/")]
     [InlineData("Mac Catalyst", "http://localhost:5222/")]
     [InlineData("Android", "http://10.0.2.2:5222/")]
@@ -38,7 +39,7 @@ public class ApiBaseAddressSelectorTests
             debugOverride: "http://localhost:5222/");
 
         Assert.Equal(
-            ApiBaseAddressSelector.ReleaseApiBaseAddress,
+            "https://pantrypal-api-frgrbrjbccbh3gn.westus-01.azurewebsites.net/",
             address.AbsoluteUri);
     }
 

@@ -326,6 +326,8 @@ public sealed class AzureAiRecipeAnalysisService
         var requestedRecipeIds = batch.Recipes
             .Select(recipe => recipe.RecipeID)
             .ToHashSet();
+        // Send only recipe facts needed for difficulty: ID, title, ingredients,
+        // cooking time, servings, and at most 1,200 instruction characters.
         var userContent = JsonSerializer.Serialize(new
         {
             recipes = batch.Recipes.Select(recipe => new
@@ -415,6 +417,8 @@ public sealed class AzureAiRecipeAnalysisService
             var unexpectedRecipeIds = new HashSet<int>();
             var invalidItemsWithoutRecipeId = 0;
 
+            // The model returns one recipe ID and Easy/Medium/Hard label per item;
+            // retain only valid IDs from this batch so ratings map back unambiguously.
             // Accept only IDs that belong to this batch; duplicates invalidate that
             // ID, and unsupported difficulty labels are left for caller fallback.
             foreach (var item in analysis.Recipes)

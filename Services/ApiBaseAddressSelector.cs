@@ -7,9 +7,9 @@ public static class ApiBaseAddressSelector
 {
     /// Deployed API used by non-Debug builds.
     public const string ReleaseApiBaseAddress =
-        "https://pantrypal-api-frgrbrbjcccbh3gn.westus-01.azurewebsites.net/";
+        "https://pantrypal-api-frgrbrjbccbh3gn.westus-01.azurewebsites.net/";
 
-    /// Returns the release API, a validated debug override, or the local API address
+    /// Returns the release API, a validated Debug override, or the local API address
     /// appropriate for the platform.
     public static Uri Select(
         bool isDebug,

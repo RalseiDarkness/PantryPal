@@ -361,6 +361,7 @@ public class RecipeService : IRecipeRecommendationDataSource
         // Compare recipe ingredients by exact name and byte length, then use
         // selected-ingredient overlap to rank results and derive missing items.
         const string sql = """
+            -- Resolve submitted IDs or names into canonical ingredient names.
             WITH SelectedIngredientNameRows AS (
                 SELECT i.IngredientName
                 FROM OPENJSON(@IngredientIdsJson)
@@ -394,6 +395,7 @@ public class RecipeService : IRecipeRecommendationDataSource
                 INNER JOIN Ingredients AS i
                     ON i.IngredientID = ri.IngredientID
             ),
+            -- Only recipes with at least one pantry ingredient are returned.
             MatchingRecipes AS (
                 SELECT
                     recipeIngredient.RecipeID,
@@ -425,6 +427,7 @@ public class RecipeService : IRecipeRecommendationDataSource
                 r.Instructions,
                 r.DateAdded,
                 ric.MatchingIngredientCount,
+                -- Match percentage is recipe coverage; missing count is the remaining recipe ingredients.
                 ric.TotalIngredientCount - ric.MatchingIngredientCount
                     AS MissingIngredientCount,
                 CAST(
@@ -432,6 +435,7 @@ public class RecipeService : IRecipeRecommendationDataSource
                     NULLIF(ric.TotalIngredientCount, 0)
                     AS decimal(5, 2)
                 ) AS MatchPercentage,
+                -- Return the intersection and complement as itemized ingredient names.
                 (
                     SELECT recipeIngredient.IngredientName AS [Name]
                     FROM RecipeIngredientsByName AS recipeIngredient
@@ -483,6 +487,7 @@ public class RecipeService : IRecipeRecommendationDataSource
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
+        // SQL orders the rows by pantry overlap; map each row and its ingredient lists into the API result model.
         while (await reader.ReadAsync(cancellationToken))
         {
             recipes.Add(new RecipeSearchResult

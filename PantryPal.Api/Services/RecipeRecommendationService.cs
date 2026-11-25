@@ -85,6 +85,7 @@ public sealed class RecipeRecommendationService
                 "Azure AI recipe complexity analysis failed; SQL matches will still be returned.");
         }
 
+        // Apply ratings by recipe ID; SQL results stay visible when a batch has no valid rating.
         var unavailableCount = 0;
         foreach (var recipe in recipes)
         {
