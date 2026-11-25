@@ -554,7 +554,7 @@ public sealed class AzureAiRecipeAnalysisService
         int Number,
         Dictionary<int, string> Results);
 
-    /// Validates the HTTPS endpoint and returns the deployment name.
+    /// Validates the HTTPS endpoint and returns the deployment name. 
     private string GetConfiguredDeployment()
     {
         var endpointValue = _configuration["AzureOpenAI:Endpoint"];

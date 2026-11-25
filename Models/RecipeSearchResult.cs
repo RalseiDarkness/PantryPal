@@ -1,15 +1,18 @@
+using System.Collections.Specialized;
 using System.Net;
+using System.ComponentModel;
 using System.Text.RegularExpressions;
 
 namespace PantryPal.Models;
 
 // one recipe sent back by the api
 // the property names match the api's json, capitals don't matter when it's read
-/// Client-side recipe contract deserialized from PantryPal.Api, including SQL
-/// matches and optional AI fields used by the recipe detail page.
-public class RecipeSearchResult
+// Client-side recipe contract deserialized from PantryPal.Api, including SQL
+// matches and optional AI fields used by the recipe detail page.
+
+public class RecipeSearchResult : INotifyPropertyChanged
 {
-    /// <summary>Stable recipe ID used for detail-analysis requests.</summary>
+    //Stable recipe ID used for detail-analysis requests.
     public int RecipeID { get; set; }
     public string Title { get; set; } = "";
     public string? ImageURL { get; set; }
@@ -22,7 +25,7 @@ public class RecipeSearchResult
     // the steps, the database stores them as html like <ol><li>step</li></ol>
     public string? Instructions { get; set; }
 
-    /// <summary>Counts and percentage used to describe the pantry match.</summary>
+    //Counts and percentage used to describe the pantry match.
     public int MatchingIngredientCount { get; set; }
     public int MissingIngredientCount { get; set; }
     public decimal MatchPercentage { get; set; }
@@ -48,6 +51,75 @@ public class RecipeSearchResult
 
     // everything below is made from the data above for the pages to show
     // they only have get, so the json reader skips them
+
+    
+    //this one this specifically to detect changes in UI
+
+    // event listener waits for properties to change
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    // special case bool to check if item is already favorite, actual value of it
+    private bool isFavorite = false;
+
+    // tells UI there were changes in parametrs and refreshed it, public value that broadcasts update
+    public bool IsFavorite
+    {
+        get => isFavorite;
+        set
+        {
+            if (isFavorite != value)
+            {
+                isFavorite = value;
+
+                PropertyChanged?.Invoke(this,
+                    new PropertyChangedEventArgs(nameof(IsFavorite)));
+
+                PropertyChanged?.Invoke(this,
+                    new PropertyChangedEventArgs(nameof(FavoriteStar)));
+            }
+        }
+    }
+
+    // special case for favorite image change, depends on isFavorite bool value
+    public string FavoriteStar
+    {
+        get
+        {
+            if(isFavorite)
+            {
+                return "golden_star.png";
+            }
+            else
+            {
+                return "hollow_star.png";
+            }
+        }
+    }
+
+    // shows green checkmark when matches 80% of ingredients, yellow when 50% of ingredients and red when
+    // less than 50%
+
+    public string MatchingImage
+    {
+        get
+        {
+            int matching = MatchingIngredients.Count;
+            int total = MissingIngredients.Count + MatchingIngredients.Count;
+            if(matching/total > 0.8)
+            {
+                return "checkmark.jpg";
+            }
+            else if(matching/total < 0.8 &&
+                    matching/total > 0.5)
+            {
+                return "warning.jpg";
+            }
+            else
+            {
+                return "red_cross.png";
+            }
+        }
+    }
 
     // short line under the title, like 45 min, serves 4
     public string Summary
@@ -246,10 +318,8 @@ public class RecipeSearchResult
         public string Certainty { get; set; } = string.Empty;
     }
 
-    /// <summary>
-    /// Converts the database's HTML instruction text into readable individual
-    /// lines for the vertically scrolling cooking page.
-    /// </summary>
+    // Converts the database's HTML instruction text into readable individual
+    // lines for the vertically scrolling cooking page.
     public List<string> GetInstructionSteps()
     {
         if (string.IsNullOrWhiteSpace(Instructions))

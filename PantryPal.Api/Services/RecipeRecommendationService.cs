@@ -28,7 +28,7 @@ public sealed class RecipeRecommendationService
 
     /// Validates pantry IDs, loads up to the configured result limit from SQL, and
     /// enriches the matches with complexity ratings when AI is available.
-
+    ///
     /// A complexity failure does not discard SQL matches; affected recipes are
     /// returned with an unavailable rating and an explanatory response field.
     public async Task<RecipeRecommendationResponse> GetRecommendationsAsync(
